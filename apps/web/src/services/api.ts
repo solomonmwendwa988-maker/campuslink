@@ -259,3 +259,80 @@ export async function revokeSession(sessionId: string) {
     authenticated: true,
   });
 }
+
+/* =========================================================
+   REAL MESSAGING (database-backed)
+   ========================================================= */
+
+export interface MessagingPerson {
+  id: string;
+  username: string;
+  profile?: { fullName?: string | null; photoUrl?: string | null } | null;
+}
+
+export interface ApiMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  clientMessageId?: string | null;
+  content: string;
+  readAt?: string | null;
+  createdAt: string;
+  sender?: MessagingPerson;
+  attachments?: Array<{ id: string; url: string; mediaType: string }>;
+  reactions?: Array<{ userId: string; reaction: string }>;
+}
+
+export interface ApiConversation {
+  id: string;
+  participants: MessagingPerson[];
+  lastMessage: ApiMessage | null;
+  unreadCount: number;
+  updatedAt: string;
+}
+
+export async function listConversations() {
+  return request<{ data: ApiConversation[] }>('/messages/conversations', { authenticated: true });
+}
+export async function startConversation(username: string) {
+  return request<{ conversation: ApiConversation }>('/messages/conversations', {
+    method: 'POST', authenticated: true, body: JSON.stringify({ username }),
+  });
+}
+export async function getConversationMessages(conversationId: string, cursor?: string) {
+  const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return request<{ data: ApiMessage[]; nextCursor: string | null }>(`/messages/conversations/${encodeURIComponent(conversationId)}/messages${suffix}`, { authenticated: true });
+}
+export async function sendConversationMessage(conversationId: string, content: string, clientMessageId: string) {
+  return request<{ message: ApiMessage; duplicate?: boolean }>(`/messages/conversations/${encodeURIComponent(conversationId)}/messages`, {
+    method: 'POST', authenticated: true, body: JSON.stringify({ content, clientMessageId }),
+  });
+}
+export async function markConversationRead(conversationId: string) {
+  return request<{ readAt: string }>(`/messages/conversations/${encodeURIComponent(conversationId)}/read`, { method: 'POST', authenticated: true });
+}
+
+export interface DiscoverStudent {
+  id: string;
+  username: string;
+  profile?: {
+    fullName?: string | null;
+    course?: string | null;
+    yearOfStudy?: number | null;
+    bio?: string | null;
+    photoUrl?: string | null;
+    university?: { name?: string | null } | null;
+    campus?: { name?: string | null } | null;
+    interests?: string[];
+    skills?: string[];
+  } | null;
+  counts?: { follows?: number; followedBy?: number; posts?: number };
+}
+
+export async function discoverStudents(search = ''): Promise<DiscoverStudent[]> {
+  const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  const result = await request<{ data: DiscoverStudent[] }>(`/profiles/discover${query}`, { authenticated: true });
+  return result.data ?? [];
+}
+
+

@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
 import { ProfilesService } from './profiles.service.js';
-import { ConnectionPageDto, UpdateProfileDto } from './profiles.dto.js';
+import { ConnectionPageDto, DiscoverStudentsDto, UpdateProfileDto } from './profiles.dto.js';
 
 type RequestWithUser = Request & { user?: { id: string } };
 
@@ -17,6 +17,9 @@ export class ProfilesController {
 
   @Patch('me') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
   update(@Req() req: RequestWithUser, @Body() dto: UpdateProfileDto) { return this.profiles.update(req.user!.id, dto); }
+
+  @Get('discover')
+  discover(@Req() req: RequestWithUser, @Query() query: DiscoverStudentsDto) { return this.profiles.discover(req.user!.id, query.search); }
 
   @Get(':username')
   publicProfile(@Param('username') username: string, @Req() req: RequestWithUser) { return this.profiles.byUsername(req.user?.id, username); }

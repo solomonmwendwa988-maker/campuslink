@@ -15,6 +15,32 @@ export class ProfilesService {
     return { user };
   }
 
+  async discover(viewerId: string, search?: string) {
+    const blockedRows = await this.prisma.block.findMany({
+      where: { OR: [{ blockerId: viewerId }, { blockedId: viewerId }] },
+      select: { blockerId: true, blockedId: true },
+    });
+    const excludedIds = blockedRows.map((row) => row.blockerId === viewerId ? row.blockedId : row.blockerId);
+    const term = search?.trim();
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { not: viewerId, notIn: excludedIds },
+        deletedAt: null,
+        deactivatedAt: null,
+        profile: { isPrivate: false, ...(term ? { OR: [
+          { fullName: { contains: term, mode: 'insensitive' as const } },
+          { course: { contains: term, mode: 'insensitive' as const } },
+          { user: { username: { contains: term, mode: 'insensitive' as const } } },
+        ] } : {}) },
+      },
+      select: profileSelect,
+      orderBy: { createdAt: 'desc' },
+      take: 40,
+    });
+    return { data: users.map(({ profile, _count, ...user }) => ({ user: { ...user, profile, counts: _count } })) };
+  }
+
+
   async byUsername(viewerId: string | undefined, username: string) {
     const user = await this.prisma.user.findUnique({ where: { username: username.toLowerCase(), deletedAt: null, deactivatedAt: null }, select: profileSelect });
     if (!user) throw new NotFoundException('Profile not found.');

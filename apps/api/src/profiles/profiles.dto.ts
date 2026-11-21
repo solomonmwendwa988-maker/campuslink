@@ -15,3 +15,8 @@ export class UpdateProfileDto {
 export class ConnectionPageDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID() cursor?: string;
 }
+
+export class DiscoverStudentsDto {
+  @ApiPropertyOptional({ description: 'Search students by name, username, or course.' })
+  @IsOptional() @IsString() @MaxLength(80) search?: string;
+}
