@@ -30,6 +30,8 @@ import { MessagesPage } from '../components/messaging/MessagesPage';
 import { launchUniversity } from '../data/universities';
 import { clearCampusLinkData } from '../services/localStore';
 import { publishProfileUpdate, subscribeProfileUpdates } from '../services/profileEvents';
+import type { ApiUser } from '../services/api';
+import { clearAccessToken, getMe, logout as apiLogout, refreshAccessToken } from '../services/api';
 
 type Listing = { id: number; title: string; price: string; campus: string; category: string; image: string; seller: string; description?: string };
 type Profile = StudentProfile;
@@ -88,7 +90,9 @@ function Landing({ enter, open, dark, toggleTheme }: { enter: () => void; open: 
 }
 
 export function App() {
-  const [isAuthenticated, setAuthenticated] = useLocalState('mock-auth', false);
+  const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const isAuthenticated = Boolean(currentUser);
   const { dark, mode: themeMode, setMode: setThemeMode, setDark } = useTheme();
   const location = useLocation(); const navigate = useNavigate(); const routedPage = pageFromPath(location.pathname); const page = location.pathname === '/' && isAuthenticated ? 'Home' : routedPage; const setPage = (nextPage: string) => navigate(pathForPage(nextPage)); const [menu, setMenu] = useState(false); const [posts, setPosts] = useLocalState<Post[]>('posts', campusPostsSeed); const [marketItems, setMarketItems] = useLocalState<Listing[]>('listings', campusListingsSeed); const [favorites, setFavorites] = useLocalState<number[]>('favorites', []); const [followed, setFollowed] = useLocalState<string[]>('following', []); const [interestedEvents, setInterestedEvents] = useLocalState<string[]>('events', []); const [savedEvents, setSavedEvents] = useLocalState<string[]>('saved-events', []); const [notifications, setNotifications] = useLocalState<AppNotification[]>('notifications', notificationSeed); const [profile, setProfile] = useLocalState<Profile>('profile', profileSeed); const [preferences, setPreferences] = useLocalState<Record<string, boolean>>('preferences', {});
   const [composer, setComposer] = useState(''); const [postImage, setPostImage] = useState<string | undefined>(); const [search, setSearch] = useState(''); const [category, setCategory] = useState('All items'); const [feedTab, setFeedTab] = useState('For You'); const [viewedUsername, setViewedUsername] = useState<string | null>(null); const [toast, setToast] = useState(''); const [hiddenPosts,setHiddenPosts]=useLocalState<number[]>('hidden-posts',[]);
@@ -99,6 +103,61 @@ export function App() {
   }, []);
   useEffect(() => publishProfileUpdate(profile), [profile]);
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 2600); };
+  const profileFromUser = (
+    user: ApiUser,
+    registration?: {
+      bio?: string;
+      interests?: string;
+      skills?: string;
+      picture?: string;
+      photoCrop?: string;
+      campus?: string;
+    },
+  ): Profile => ({
+    ...profileSeed,
+    name: user.name,
+    username: `@${user.username.replace(/^@/, '')}`,
+    email: user.email,
+    university: launchUniversity.name,
+    campus: user.campus || registration?.campus || launchUniversity.campuses[0],
+    course: user.course || profileSeed.course,
+    year: String(user.year ?? profileSeed.year),
+    bio: user.bio ?? registration?.bio ?? '',
+    interests: user.interests ?? (registration?.interests?.split(',').map(value => value.trim()).filter(Boolean) ?? []),
+    skills: user.skills ?? (registration?.skills?.split(',').map(value => value.trim()).filter(Boolean) ?? []),
+    avatar: user.name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase(),
+    avatarImage: registration?.picture,
+    avatarCrop: Number(registration?.photoCrop ?? 50),
+    visibility: 'Public',
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      try {
+        const token = await refreshAccessToken();
+        if (!token || cancelled) return;
+
+        const user = await getMe();
+        if (cancelled) return;
+
+        setCurrentUser(user);
+        const restoredProfile = profileFromUser(user);
+        setProfile(restoredProfile);
+        publishProfileUpdate(restoredProfile);
+      } catch {
+        clearAccessToken();
+      } finally {
+        if (!cancelled) setAuthChecking(false);
+      }
+    };
+
+    void restoreSession();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const filteredListings = useMemo(() => marketItems.filter(l => `${l.title} ${l.category} ${l.campus}`.toLowerCase().includes(search.toLowerCase()) && (category === 'All items' || l.category === category)), [marketItems, search, category]);
   const visiblePosts = useMemo(() => posts.filter(p => !hiddenPosts.includes(p.id)).filter(p => `${p.name} ${p.handle} ${p.content} ${p.school}`.toLowerCase().includes(search.toLowerCase())).filter(p => feedTab !== 'Following' || followed.includes(p.handle)).filter(p => (feedTab !== 'Saved' && page !== 'Saved') || p.bookmarked), [posts, search, feedTab, followed, page, hiddenPosts]);
   const toggleLike = (id: number) => setPosts(current => current.map(p => p.id === id ? { ...p, liked: !p.liked, likes: p.likes + (p.liked ? -1 : 1) } : p));
@@ -108,14 +167,41 @@ export function App() {
   const updatePostImage = (file?: File) => { if (!file) return; if (!file.type.startsWith('image/') || file.size > 1_500_000) { notify('Choose an image smaller than 1.5 MB for local preview storage.'); return; } const reader = new FileReader(); reader.onload = () => setPostImage(String(reader.result)); reader.readAsDataURL(file); };
   const otherProfiles: Record<string, StudentProfile> = { '@amaniw': { ...profileSeed, name:'Amani Wanjiku',username:'@amaniw',avatar:'AW',course:'Environmental Science',year:'2',bio:'Finding small ways to make campus life greener.' }, '@kevin.o': { ...profileSeed,name:'Kevin Otieno',username:'@kevin.o',avatar:'KO',course:'Business Information Technology',year:'4',bio:'Building things with good people. Nairobi.' }, '@njeri.k': { ...profileSeed,name:'Njeri Kamau',username:'@njeri.k',avatar:'NK',course:'Architecture',year:'3',bio:'Architecture student. Always looking for the light.' } };
   const activeProfile = viewedUsername ? otherProfiles[viewedUsername] ?? profile : profile;
-  const signInMock = (registration?: { name: string; username: string; email: string; university: string; campus: string; course: string; year: string; bio: string; interests: string; skills: string; picture?: string; photoCrop?: string }) => { if (registration) { const nextProfile = { ...profileSeed, name: registration.name, username: `@${registration.username.replace(/^@/, '')}`, email: registration.email, university: launchUniversity.name, campus: registration.campus, course: registration.course, year: registration.year, bio: registration.bio, interests: registration.interests.split(',').map(value => value.trim()).filter(Boolean), skills: registration.skills.split(',').map(value => value.trim()).filter(Boolean), avatar: registration.name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase(), avatarImage: registration.picture, avatarCrop: Number(registration.photoCrop ?? 50) }; setProfile(nextProfile); publishProfileUpdate(nextProfile); } setAuthenticated(true); setPage('Home'); notify(registration ? 'Welcome to the University of Kabianga CampusLink preview' : 'Signed in to the local preview'); };
+  const handleAuthSuccess = (user: ApiUser, registration?: {
+    name: string;
+    username: string;
+    email: string;
+    university: string;
+    campus: string;
+    course: string;
+    year: string;
+    bio: string;
+    interests: string;
+    skills: string;
+    picture?: string;
+    photoCrop?: string;
+  }) => {
+    const nextProfile = profileFromUser(user, registration);
+    setProfile(nextProfile);
+    publishProfileUpdate(nextProfile);
+    setCurrentUser(user);
+    setPage('Home');
+    notify(`Welcome to CampusLink, ${user.name.split(' ')[0]}`);
+  };
   const resetPreview = () => { clearCampusLinkData(); window.history.replaceState(null, '', '/'); window.location.reload(); };
+  const authPages = ['Login', 'Register', 'Forgot password', 'Reset password', 'Verify email'];
+  if (authChecking && page !== 'Landing' && !authPages.includes(page)) {
+    return <div className="app-toast" role="status">Restoring your CampusLink session...</div>;
+  }
+  if (!authChecking && !isAuthenticated && page !== 'Landing' && !authPages.includes(page)) {
+    return <><LandingPage open={setPage} dark={dark} toggleTheme={() => setDark(!dark)} /><Toast message={toast} /></>;
+  }
   if (page === 'Landing') return <><LandingPage open={setPage} dark={dark} toggleTheme={() => setDark(!dark)} /><Toast message={toast} /></>;
-  if (page === 'Login' || page === 'Register' || page === 'Forgot password' || page === 'Reset password' || page === 'Verify email') return <><AuthPage mode={page as AuthMode} onMode={setPage} onSuccess={signInMock}/><Toast message={toast}/></>;
+  if (page === 'Login' || page === 'Register' || page === 'Forgot password' || page === 'Reset password' || page === 'Verify email') return <><AuthPage mode={page as AuthMode} onMode={setPage} onSuccess={handleAuthSuccess}/><Toast message={toast}/></>;
   return <div className={`app-shell${page === 'Messages' ? ' messaging-route' : ''}`}>
       <header className="topbar"><button className="brand" onClick={() => setPage('Home')}><span className="brand-mark"><Sparkles size={17}/></span><span>Campus<span>Link</span></span></button><label className="top-search"><Search size={17}/><input placeholder="Search CampusLink" value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')setPage('Explore')}}/><button onClick={()=>{setPage('Explore');setSearch(search)}} aria-label="Open search"><ChevronRight size={15}/></button></label><div className="top-actions"><button className="icon-btn notification-shortcut" aria-label="Notifications" onClick={()=>setPage('Notifications')}><Bell size={19}/>{notifications.some(item=>item.unread)&&<i/>}</button><button className="icon-btn" aria-label="Toggle theme" onClick={()=>setDark(!dark)}>{dark?<Sun size={19}/>:<Moon size={19}/>}</button><button className="profile-mini" onClick={()=>{setViewedUsername(null);setPage('Profile')}}><Avatar initials={profile.avatar} image={profile.avatarImage} imagePosition={profile.avatarCrop}/><span className="hide-mobile">{profile.name}</span><ChevronRight size={15}/></button><button className="icon-btn mobile-menu" onClick={()=>setMenu(!menu)} aria-label="Open navigation">{menu?<X/>:<Menu/>}</button></div></header>
     <div className="layout"><aside className={`sidebar ${menu?'open':''}`}><div className="campus-card"><div className="campus-dot"/><div><strong>{profile.university}</strong><small>{profile.campus}</small></div></div><p className="eyebrow">CAMPUSLINK</p><nav>{nav.map(({label,icon:Icon})=><button key={label} className={page===label?'active':''} onClick={()=>{setPage(label);setMenu(false)}}><Icon size={19}/>{label}{label==='Notifications'&&notifications.some(item=>item.unread)&&<b>{notifications.filter(item=>item.unread).length}</b>}</button>)}</nav><button className="primary-btn create-post-nav" onClick={()=>{setPage('Home');window.setTimeout(()=>document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus(),60)}}><Plus size={17}/> Create post</button><p className="eyebrow">YOUR SPACE</p><nav><button onClick={()=>{setPage('Saved');setMenu(false)}} className={page==='Saved'?'active':''}><Bookmark size={19}/>Saved</button><button onClick={()=>{setViewedUsername(null);setPage('Profile');setMenu(false)}} className={page==='Profile'?'active':''}><Users size={19}/>Profile</button><button onClick={()=>{setPage('Settings');setMenu(false)}} className={page==='Settings'?'active':''}><Settings size={19}/>Settings</button></nav><button className="sidebar-profile" onClick={()=>{setViewedUsername(null);setPage('Profile')}}><Avatar initials={profile.avatar}/><span><b>{profile.name}</b><small>{profile.username}</small></span><MoreHorizontal size={17}/></button></aside>
-      <main className="content"><AnimatePresence mode="wait"><motion.div key={page} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-5}} transition={{duration:.2}}>{page==='Marketplace'?<Marketplace listings={filteredListings} search={search} setSearch={setSearch} category={category} setCategory={setCategory} favorites={favorites} toggleFavorite={id=>setFavorites(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id])} createListing={listing=>setMarketItems(current=>[{...listing,id:Date.now()},...current])} openMessages={()=>setPage('Messages')}/>:page==='Events'?<Events interested={interestedEvents} toggle={name=>setInterestedEvents(current=>current.includes(name)?current.filter(x=>x!==name):[...current,name])} saved={savedEvents} toggleSaved={id=>setSavedEvents(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id])}/>:page==='Messages'?<MessagesPage/>:page==='Explore'?<ExplorePage posts={posts} listings={marketItems} search={search} setSearch={setSearch} onProfile={username=>{setViewedUsername(username);setPage('Profile')}} onMarketplace={()=>setPage('Marketplace')} onEvents={()=>setPage('Events')}/>:page==='Profile'?<ProfilePage profile={activeProfile} posts={posts.filter(post=>post.handle===activeProfile.username)} isOwn={!viewedUsername} onEdit={()=>setPage('Settings')} onMessage={()=>setPage('Messages')} onFollow={()=>{setFollowed(current=>current.includes(activeProfile.username)?current.filter(x=>x!==activeProfile.username):[...current,activeProfile.username]);notify(followed.includes(activeProfile.username)?'Unfollowed student':'Following student')}} following={followed.includes(activeProfile.username)} listings={marketItems} onToast={notify}/>:page==='Notifications'?<NotificationsPage items={notifications} setItems={setNotifications} openMessages={()=>setPage('Messages')} openEvents={()=>setPage('Events')}/>:page==='Settings'?<SettingsPage profile={profile} onSaveProfile={value=>{setProfile(value);notify('Profile updated')}} dark={dark} setDark={setDark} preferences={preferences} setPreferences={setPreferences} onLogout={()=>{setAuthenticated(false);setPage('Landing')}} onReset={resetPreview}/>:page==='Saved'?<SavedPage posts={posts} listings={marketItems} favoriteIds={favorites} savedEventIds={savedEvents} onUnsavePost={toggleBookmark} onUnsaveListing={id=>setFavorites(current=>current.filter(x=>x!==id))} onUnsaveEvent={id=>setSavedEvents(current=>current.filter(x=>x!==id))} openMarketplace={()=>setPage('Marketplace')} openEvents={()=>setPage('Events')}/>:<><HomeHeader page={page} onCreate={()=>document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus()}/><div className="feed-grid"><section><div className="feed-tabs">{['For You','Following'].map(tab=><button key={tab} className={feedTab===tab?'selected':''} onClick={()=>setFeedTab(tab)}>{tab}</button>)}</div><Composer value={composer} setValue={setComposer} image={postImage} setImage={updatePostImage} publish={publish}/>{visiblePosts.filter(post=>feedTab!=='Following'||post.handle===profile.username||followed.includes(post.handle)).map(post=><PostCard key={post.id} post={post} own={post.handle===profile.username} onLike={()=>toggleLike(post.id)} onBookmark={()=>toggleBookmark(post.id)} onComment={reply=>addReply(post.id,reply)} onRepost={()=>{setPosts(current=>current.map(p=>p.id===post.id?{...p,reposts:(p.reposts??0)+1}:p));notify('Post reposted')}} onHide={()=>{setHiddenPosts(current=>current.includes(post.id)?current:[...current,post.id]);notify('Post hidden from feed')}} onReport={()=>notify('Report saved in this local preview')} onDelete={()=>{if(window.confirm('Delete this post?')){setPosts(current=>current.filter(p=>p.id!==post.id));notify('Post deleted')}}} onEdit={()=>{const content=window.prompt('Edit your post',post.content);if(content!==null){setPosts(current=>current.map(p=>p.id===post.id?{...p,content}:p));notify('Post updated')}}}/>)}{visiblePosts.length===0&&<div className="card empty-state"><Users size={24}/><h3>{feedTab==='Following'?'Your feed is ready to grow':'No matching posts'}</h3><p>Follow students or share a campus moment to get started.</p></div>}</section><RightRail followed={followed} toggleFollow={handle=>setFollowed(current=>current.includes(handle)?current.filter(x=>x!==handle):[...current,handle])} onExplore={()=>setPage('Explore')} onEvents={()=>setPage('Events')}/></div></>}</motion.div></AnimatePresence></main>
+      <main className="content"><AnimatePresence mode="wait"><motion.div key={page} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-5}} transition={{duration:.2}}>{page==='Marketplace'?<Marketplace listings={filteredListings} search={search} setSearch={setSearch} category={category} setCategory={setCategory} favorites={favorites} toggleFavorite={id=>setFavorites(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id])} createListing={listing=>setMarketItems(current=>[{...listing,id:Date.now()},...current])} openMessages={()=>setPage('Messages')}/>:page==='Events'?<Events interested={interestedEvents} toggle={name=>setInterestedEvents(current=>current.includes(name)?current.filter(x=>x!==name):[...current,name])} saved={savedEvents} toggleSaved={id=>setSavedEvents(current=>current.includes(id)?current.filter(x=>x!==id):[...current,id])}/>:page==='Messages'?<MessagesPage/>:page==='Explore'?<ExplorePage posts={posts} listings={marketItems} search={search} setSearch={setSearch} onProfile={username=>{setViewedUsername(username);setPage('Profile')}} onMarketplace={()=>setPage('Marketplace')} onEvents={()=>setPage('Events')}/>:page==='Profile'?<ProfilePage profile={activeProfile} posts={posts.filter(post=>post.handle===activeProfile.username)} isOwn={!viewedUsername} onEdit={()=>setPage('Settings')} onMessage={()=>setPage('Messages')} onFollow={()=>{setFollowed(current=>current.includes(activeProfile.username)?current.filter(x=>x!==activeProfile.username):[...current,activeProfile.username]);notify(followed.includes(activeProfile.username)?'Unfollowed student':'Following student')}} following={followed.includes(activeProfile.username)} listings={marketItems} onToast={notify}/>:page==='Notifications'?<NotificationsPage items={notifications} setItems={setNotifications} openMessages={()=>setPage('Messages')} openEvents={()=>setPage('Events')}/>:page==='Settings'?<SettingsPage profile={profile} onSaveProfile={value=>{setProfile(value);notify('Profile updated')}} dark={dark} setDark={setDark} preferences={preferences} setPreferences={setPreferences} onLogout={()=>{void apiLogout();setCurrentUser(null);setPage('Landing')}} onReset={resetPreview}/>:page==='Saved'?<SavedPage posts={posts} listings={marketItems} favoriteIds={favorites} savedEventIds={savedEvents} onUnsavePost={toggleBookmark} onUnsaveListing={id=>setFavorites(current=>current.filter(x=>x!==id))} onUnsaveEvent={id=>setSavedEvents(current=>current.filter(x=>x!==id))} openMarketplace={()=>setPage('Marketplace')} openEvents={()=>setPage('Events')}/>:<><HomeHeader page={page} onCreate={()=>document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus()}/><div className="feed-grid"><section><div className="feed-tabs">{['For You','Following'].map(tab=><button key={tab} className={feedTab===tab?'selected':''} onClick={()=>setFeedTab(tab)}>{tab}</button>)}</div><Composer value={composer} setValue={setComposer} image={postImage} setImage={updatePostImage} publish={publish}/>{visiblePosts.filter(post=>feedTab!=='Following'||post.handle===profile.username||followed.includes(post.handle)).map(post=><PostCard key={post.id} post={post} own={post.handle===profile.username} onLike={()=>toggleLike(post.id)} onBookmark={()=>toggleBookmark(post.id)} onComment={reply=>addReply(post.id,reply)} onRepost={()=>{setPosts(current=>current.map(p=>p.id===post.id?{...p,reposts:(p.reposts??0)+1}:p));notify('Post reposted')}} onHide={()=>{setHiddenPosts(current=>current.includes(post.id)?current:[...current,post.id]);notify('Post hidden from feed')}} onReport={()=>notify('Report saved in this local preview')} onDelete={()=>{if(window.confirm('Delete this post?')){setPosts(current=>current.filter(p=>p.id!==post.id));notify('Post deleted')}}} onEdit={()=>{const content=window.prompt('Edit your post',post.content);if(content!==null){setPosts(current=>current.map(p=>p.id===post.id?{...p,content}:p));notify('Post updated')}}}/>)}{visiblePosts.length===0&&<div className="card empty-state"><Users size={24}/><h3>{feedTab==='Following'?'Your feed is ready to grow':'No matching posts'}</h3><p>Follow students or share a campus moment to get started.</p></div>}</section><RightRail followed={followed} toggleFollow={handle=>setFollowed(current=>current.includes(handle)?current.filter(x=>x!==handle):[...current,handle])} onExplore={()=>setPage('Explore')} onEvents={()=>setPage('Events')}/></div></>}</motion.div></AnimatePresence></main>
     </div><nav className="mobile-bottom-nav">{[{label:'Home',icon:Home},{label:'Explore',icon:Compass},{label:'Marketplace',icon:ShoppingBag},{label:'Messages',icon:MessageCircle},{label:'Profile',icon:Users}].map(({label,icon:Icon})=><button key={label} className={page===label?'active':''} onClick={()=>{if(label==='Profile')setViewedUsername(null);setPage(label)}}><Icon size={19}/><small>{label}</small></button>)}</nav><Toast message={toast}/>
   </div>;
 }
