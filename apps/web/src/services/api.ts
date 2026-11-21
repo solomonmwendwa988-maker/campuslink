@@ -397,3 +397,36 @@ export async function getProfileFollowers(username: string, cursor?: string) {
     { authenticated: true },
   );
 }
+
+/* =========================================================
+   CAMPUS MARKETPLACE (database-backed)
+   ========================================================= */
+export interface MarketplaceApiListing {
+  id: string; title: string; description: string; category: string; price: string | number;
+  condition: 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR'; available: boolean;
+  sellerId: string; seller?: MessagingPerson; images?: Array<{ id: string; url: string; position: number }>;
+  campus?: { id: string; name: string; university?: { name?: string } };
+  _count?: { favorites?: number };
+}
+export async function getMarketplaceListings(params: { search?: string; category?: string; minPrice?: number; maxPrice?: number; cursor?: string } = {}) {
+  const query = new URLSearchParams();
+  if (params.search?.trim()) query.set('search', params.search.trim());
+  if (params.category?.trim()) query.set('category', params.category.trim());
+  if (params.minPrice !== undefined) query.set('minPrice', String(params.minPrice));
+  if (params.maxPrice !== undefined) query.set('maxPrice', String(params.maxPrice));
+  if (params.cursor) query.set('cursor', params.cursor);
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return request<{ data: MarketplaceApiListing[]; nextCursor: string | null }>(`/marketplace/listings${suffix}`, { authenticated: true });
+}
+export async function createMarketplaceListing(payload: { title: string; description: string; category: string; price: number; condition: MarketplaceApiListing['condition']; images?: string[] }) {
+  return request<MarketplaceApiListing>('/marketplace/listings', { method: 'POST', authenticated: true, body: JSON.stringify(payload) });
+}
+export async function favoriteMarketplaceListing(id: string) {
+  return request<{ favorited: boolean }>(`/marketplace/listings/${encodeURIComponent(id)}/favorite`, { method: 'POST', authenticated: true });
+}
+export async function unfavoriteMarketplaceListing(id: string) {
+  return request<{ favorited: boolean }>(`/marketplace/listings/${encodeURIComponent(id)}/favorite`, { method: 'DELETE', authenticated: true });
+}
+export async function recordPostView(postId: string) {
+  return request<{ viewed: boolean; views: number }>(`/posts/${encodeURIComponent(postId)}/view`, { method: 'POST', authenticated: true });
+}

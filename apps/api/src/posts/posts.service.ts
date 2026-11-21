@@ -19,12 +19,20 @@ export class PostsService {
     const posts = await this.prisma.post.findMany({
       where: { deletedAt: null, author: { deletedAt: null, deactivatedAt: null, profile: { university: { slug: 'university-of-kabianga' } } }, AND: [{ authorId: { notIn: excluded } }, ...(followingIds ? [{ authorId: { in: followingIds } }] : [])] },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: pageSize + 1, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true, reposts: true } }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } }, bookmarks: { where: { userId: viewerId }, select: { userId: true } } } : {}) },
+      include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true, reposts: true, views: true } }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } }, bookmarks: { where: { userId: viewerId }, select: { userId: true } }, views: { where: { userId: viewerId }, select: { userId: true } } } : {}) },
     });
     const hasMore = posts.length > pageSize;
-    const data = posts.slice(0, pageSize).map(({ likes, bookmarks, ...post }) => ({ ...post, liked: Boolean(likes?.length), bookmarked: Boolean(bookmarks?.length) }));
+    const data = posts.slice(0, pageSize).map(({ likes, bookmarks, views, ...post }) => ({ ...post, liked: Boolean(likes?.length), bookmarked: Boolean(bookmarks?.length), viewed: Boolean(views?.length) }));
     return { data, nextCursor: hasMore ? data.at(-1)?.id ?? null : null };
   }
+
+  async recordView(userId: string, postId: string) {
+    await this.assertCanInteract(userId, postId);
+    await this.prisma.postView.upsert({ where: { userId_postId: { userId, postId } }, update: {}, create: { userId, postId } });
+    const views = await this.prisma.postView.count({ where: { postId } });
+    return { viewed: true, views };
+  }
+
 
   async create(authorId: string, dto: CreatePostDto) {
     return this.prisma.post.create({ data: { authorId, content: dto.content.trim() }, include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true } } } });

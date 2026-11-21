@@ -4,7 +4,17 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ListingAvailabilityDto, ListingDto, ListingQueryDto } from './marketplace.dto.js';
 
 const safeSeller = { id: true, username: true, profile: { select: { fullName: true, photoUrl: true, campus: { select: { name: true } } } } } satisfies Prisma.UserSelect;
-const listingInclude = { seller: { select: safeSeller }, campus: { select: { id: true, name: true, university: { select: { name: true } } } }, _count: { select: { favorites: true } } } satisfies Prisma.ListingInclude;
+const listingInclude = { seller: { select: safeSeller }, campus: { select: { id: true, name: true, university: { select: { name: true } } } }, images: { orderBy: { position: 'asc' } }, _count: { select: { favorites: true } } } satisfies Prisma.ListingInclude;
+const MAX_IMAGE_BYTES = 220 * 1024;
+function validateListingImages(images: string[] = []) {
+  if (images.length > 3) throw new ForbiddenException('A listing can have at most 3 photos.');
+  for (const image of images) {
+    if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(image)) throw new ForbiddenException('Only compressed JPEG, PNG or WebP photos are accepted.');
+    const encoded = image.split(',')[1] ?? '';
+    const bytes = Math.floor(encoded.length * 3 / 4) - (encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0);
+    if (bytes > MAX_IMAGE_BYTES) throw new ForbiddenException('Each listing photo must be under 220 KB after compression.');
+  }
+}
 
 @Injectable()
 export class MarketplaceService {
@@ -36,13 +46,17 @@ export class MarketplaceService {
   async create(sellerId: string, dto: ListingDto) {
     const profile = await this.prisma.profile.findUnique({ where: { userId: sellerId }, select: { campusId: true } });
     if (!profile) throw new NotFoundException('Complete your student profile before listing an item.');
-    return this.prisma.listing.create({ data: { sellerId, campusId: profile.campusId, ...dto, price: new Prisma.Decimal(dto.price) }, include: listingInclude });
+    validateListingImages(dto.images);
+    const { images = [], ...listingData } = dto;
+    return this.prisma.listing.create({ data: { sellerId, campusId: profile.campusId, ...listingData, price: new Prisma.Decimal(dto.price), images: { create: images.map((url, position) => ({ url, position })) } }, include: listingInclude });
   }
 
   async update(sellerId: string, id: string, dto: ListingDto) {
     const owned = await this.prisma.listing.findFirst({ where: { id, sellerId, deletedAt: null }, select: { id: true } });
     if (!owned) throw new NotFoundException('Listing not found.');
-    return this.prisma.listing.update({ where: { id }, data: { ...dto, price: new Prisma.Decimal(dto.price) }, include: listingInclude });
+    validateListingImages(dto.images);
+    const { images = [], ...listingData } = dto;
+    return this.prisma.listing.update({ where: { id }, data: { ...listingData, price: new Prisma.Decimal(dto.price), images: { deleteMany: {}, create: images.map((url, position) => ({ url, position })) } }, include: listingInclude });
   }
 
   async remove(sellerId: string, id: string) {

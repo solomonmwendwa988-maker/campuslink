@@ -25,6 +25,9 @@ export class PostsController {
   @Delete(':id') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
   delete(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string) { return this.posts.delete(req.user!.id, id); }
 
+  @Post(':id/view') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
+  view(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string) { return this.posts.recordView(req.user!.id, id); }
+
   @Post(':id/like') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
   like(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string) { return this.posts.toggleLike(req.user!.id, id, true); }
 

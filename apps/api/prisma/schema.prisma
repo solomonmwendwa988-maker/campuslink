@@ -71,6 +71,7 @@ model User {
   likes              Like[]
   bookmarks          Bookmark[]
   reposts            Repost[]
+  postViews          PostView[]
   follows            Follow[]      @relation("follower")
   followedBy         Follow[]      @relation("followed")
   memberships        ConversationParticipant[]
@@ -131,11 +132,23 @@ model Post {
   likes     Like[]
   bookmarks Bookmark[]
   reposts   Repost[]
+  views     PostView[]
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
   @@index([createdAt(sort: Desc), id])
   @@index([authorId, createdAt(sort: Desc)])
 }
+
+model PostView {
+  userId    String   @db.Uuid
+  postId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  @@id([userId, postId])
+  @@index([postId, createdAt])
+}
+
 
 model PostMedia {
   id        String @id @default(uuid()) @db.Uuid
