@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 128" fill="none">
+  <g transform="translate(4 4) scale(.94)">
+    <path d="M42 55V40c0-16 12-28 28-28s28 12 28 28v21l17 10c14 8 18 26 10 40s-26 18-40 10l-20-12" stroke="#10264F" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m62 87-19 11c-14 8-32 3-40-11S0 55 14 47l28-16" stroke="#D5AE55" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M63 40v20c0 10 5 18 14 23l18 11" stroke="#10264F" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="142" y="79" fill="#10264F" font-family="Arial, sans-serif" font-size="48" font-weight="700" letter-spacing="-1.5">CampusLink</text>
+</svg>
