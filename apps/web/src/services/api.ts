@@ -335,4 +335,43 @@ export async function discoverStudents(search = ''): Promise<DiscoverStudent[]> 
   return result.data ?? [];
 }
 
+/* =========================================================
+   STUDENT PROFILES & CONNECTIONS
+   ========================================================= */
 
+export interface PublicStudentProfile extends DiscoverStudent {
+  isFollowing?: boolean;
+  profile?: DiscoverStudent['profile'] & {
+    coverUrl?: string | null;
+    campus?: { name?: string | null } | string | null;
+    university?: { name?: string | null } | string | null;
+  };
+}
+
+export async function getPublicProfile(username: string): Promise<{ user: PublicStudentProfile }> {
+  return request<{ user: PublicStudentProfile }>(`/profiles/${encodeURIComponent(username.replace(/^@/, ''))}`, {
+    authenticated: true,
+  });
+}
+
+export async function followStudent(username: string): Promise<{ following: boolean }> {
+  return request<{ following: boolean }>(`/profiles/${encodeURIComponent(username.replace(/^@/, ''))}/follow`, {
+    method: 'POST',
+    authenticated: true,
+  });
+}
+
+export async function unfollowStudent(username: string): Promise<{ following: boolean }> {
+  return request<{ following: boolean }>(`/profiles/${encodeURIComponent(username.replace(/^@/, ''))}/unfollow`, {
+    method: 'POST',
+    authenticated: true,
+  });
+}
+
+export async function getProfileFollowers(username: string, cursor?: string) {
+  const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return request<{ data: MessagingPerson[]; nextCursor: string | null }>(
+    `/profiles/${encodeURIComponent(username.replace(/^@/, ''))}/followers${suffix}`,
+    { authenticated: true },
+  );
+}

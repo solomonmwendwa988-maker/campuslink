@@ -1,6 +1,0 @@
-@media (max-width: 720px) {
-  .topbar { min-width: 0; gap: 8px; }
-  .topbar > .brand { flex: 1; min-width: 0; }
-  .top-actions { flex: 0 0 auto; gap: 14px; }
-  .topbar .mobile-menu { width: 28px; min-width: 28px; }
-}

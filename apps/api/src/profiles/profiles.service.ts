@@ -50,7 +50,13 @@ export class ProfilesService {
     }
     if (user.profile?.isPrivate && viewerId !== user.id) throw new ForbiddenException('This profile is private.');
     const { isPrivate: _private, ...profile } = user.profile ?? {};
-    return { user: { id: user.id, username: user.username, profile, counts: user._count } };
+    const isFollowing = viewerId && viewerId !== user.id
+      ? Boolean(await this.prisma.follow.findUnique({
+          where: { followerId_followedId: { followerId: viewerId, followedId: user.id } },
+          select: { followerId: true },
+        }))
+      : false;
+    return { user: { id: user.id, username: user.username, profile, counts: user._count, isFollowing } };
   }
 
   async update(userId: string, dto: UpdateProfileDto) {

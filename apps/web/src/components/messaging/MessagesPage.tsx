@@ -20,7 +20,7 @@ function timeLabel(date?: string) {
   return value.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function MessagesPage() {
+export function MessagesPage({ initialUsername, onInitialHandled }: { initialUsername?: string; onInitialHandled?: () => void }) {
   const [conversations, setConversations] = useState<ApiConversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ApiMessage[]>([]);
@@ -34,6 +34,7 @@ export function MessagesPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const openedInitialUsername = useRef<string>('');
   const selected = conversations.find(item => item.id === selectedId) ?? null;
   const contact = selected?.participants?.[0];
   const filtered = useMemo(() => conversations.filter(item => {
@@ -47,13 +48,12 @@ export function MessagesPage() {
     try {
       const result = await listConversations();
       setConversations(result.data);
-      if (!selectedId && result.data.length) setSelectedId(result.data[0].id);
-      if (selectedId && !result.data.some(item => item.id === selectedId)) setSelectedId(null);
+      setSelectedId(current => current && result.data.some(item => item.id === current) ? current : result.data[0]?.id ?? null);
       setError('');
     } catch (err) {
       if (!quiet) setError(err instanceof Error ? err.message : 'Could not load conversations.');
     } finally { if (!quiet) setLoadingList(false); }
-  }, [selectedId]);
+  }, []);
 
   const refreshMessages = useCallback(async (conversationId: string, quiet = false) => {
     if (!quiet) setLoadingMessages(true);
@@ -67,6 +67,31 @@ export function MessagesPage() {
   }, []);
 
   useEffect(() => { void refreshConversations(); }, []);
+  useEffect(() => {
+    const username = (initialUsername ?? '').trim().replace(/^@/, '');
+    if (!username || openedInitialUsername.current.toLowerCase() === username.toLowerCase()) return;
+    openedInitialUsername.current = username;
+    let cancelled = false;
+    setError('');
+    void startConversation(username)
+      .then(async result => {
+        if (cancelled) return;
+        setSelectedId(result.conversation.id);
+        setMobileChatOpen(true);
+        await refreshConversations(true);
+        if (!cancelled) {
+          setSelectedId(result.conversation.id);
+          onInitialHandled?.();
+        }
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setError(error instanceof Error ? error.message : 'Could not open this student conversation.');
+          onInitialHandled?.();
+        }
+      });
+    return () => { cancelled = true; };
+  }, [initialUsername, refreshConversations, onInitialHandled]);
   useEffect(() => {
     if (!selectedId) { setMessages([]); return; }
     void refreshMessages(selectedId);
