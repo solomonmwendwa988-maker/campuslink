@@ -9,9 +9,9 @@ let refreshPromise: Promise<string | null> | null = null;
 
 export interface ApiUser {
   id: string;
-  email: string;
+  email?: string;
   username: string;
-  name: string;
+  name?: string;
   campus?: string;
   course?: string;
   year?: number;
@@ -19,6 +19,8 @@ export interface ApiUser {
   interests?: string[];
   skills?: string[];
   emailVerified?: boolean;
+  profile?: { fullName?: string | null; bio?: string | null; course?: string | null; yearOfStudy?: number | string | null; photoUrl?: string | null; coverUrl?: string | null; interests?: string[]; skills?: string[]; isPrivate?: boolean; campus?: { name?: string | null } | string | null; university?: { name?: string | null } | string | null } | null;
+  counts?: { follows?: number; followedBy?: number; posts?: number };
 }
 
 export interface AuthResponse {
@@ -38,6 +40,7 @@ export interface RegisterPayload {
   bio?: string;
   interests?: string[];
   skills?: string[];
+  photoUrl?: string;
 }
 
 export interface LoginPayload {
@@ -182,9 +185,18 @@ export async function refreshAccessToken(): Promise<string | null> {
 }
 
 export async function getMe(): Promise<ApiUser> {
-  return request<ApiUser>('/auth/me', {
-    authenticated: true,
-  });
+  const result = await request<{ user: ApiUser }>('/auth/me', { authenticated: true });
+  return result.user;
+}
+
+export async function getOwnProfile(): Promise<{ user: PublicStudentProfile }> {
+  return request<{ user: PublicStudentProfile }>('/profiles/me', { authenticated: true });
+}
+
+export type UpdateOwnProfilePayload = { username?: string; fullName?: string; bio?: string | null; course?: string; campus?: string; yearOfStudy?: number; interests?: string[]; skills?: string[]; isPrivate?: boolean; photoUrl?: string | null; coverUrl?: string | null };
+
+export async function updateOwnProfile(payload: UpdateOwnProfilePayload) {
+  return request('/profiles/me', { method: 'PATCH', authenticated: true, body: JSON.stringify(payload) });
 }
 
 export async function logout(): Promise<void> {

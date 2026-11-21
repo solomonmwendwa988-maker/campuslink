@@ -10,9 +10,10 @@ export class ProfilesService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async own(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId, deletedAt: null }, select: { id: true, username: true, email: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true } } } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId, deletedAt: null, deactivatedAt: null }, select: { id: true, username: true, email: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true } }, _count: { select: { follows: true, followedBy: true, posts: true } } } });
     if (!user) throw new NotFoundException('Profile not found.');
-    return { user };
+    const { _count, ...publicUser } = user;
+    return { user: { ...publicUser, counts: _count } };
   }
 
   async discover(viewerId: string, search?: string) {
@@ -60,10 +61,18 @@ export class ProfilesService {
   }
 
   async update(userId: string, dto: UpdateProfileDto) {
-    const { username, ...profileData } = dto;
+    const { username, campus, ...profileFields } = dto;
+    const profileData: Prisma.ProfileUpdateInput = profileFields;
     try {
       const result = await this.prisma.$transaction(async (tx) => {
         if (username) await tx.user.update({ where: { id: userId }, data: { username: username.toLowerCase() } });
+        if (campus?.trim()) {
+          const currentProfile = await tx.profile.findUnique({ where: { userId }, select: { universityId: true } });
+          if (!currentProfile) throw new NotFoundException('Profile not found.');
+          const targetCampus = await tx.campus.findFirst({ where: { universityId: currentProfile.universityId, name: { equals: campus.trim(), mode: 'insensitive' } }, select: { id: true } });
+          if (!targetCampus) throw new NotFoundException('Campus is not available at your university.');
+          profileData.campus = { connect: { id: targetCampus.id } };
+        }
         const user = await tx.user.update({ where: { id: userId }, data: { profile: { update: profileData } }, select: { id: true, username: true, profile: { select: { fullName: true, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true } } } });
         return { user };
       });

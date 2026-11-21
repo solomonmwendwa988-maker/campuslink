@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class RegisterDto {
@@ -12,6 +12,7 @@ export class RegisterDto {
   @ApiProperty({ required: false }) @IsOptional() @IsString() @MaxLength(500) bio?: string;
   @ApiProperty({ required: false, type: [String] }) @IsOptional() interests?: string[];
   @ApiProperty({ required: false, type: [String] }) @IsOptional() skills?: string[];
+  @ApiPropertyOptional({ description: 'Optimized profile image data URL.' }) @IsOptional() @IsString() @MaxLength(1500000) photoUrl?: string;
 }
 
 export class LoginDto {

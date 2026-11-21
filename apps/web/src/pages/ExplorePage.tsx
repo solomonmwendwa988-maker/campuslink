@@ -49,7 +49,7 @@ function normalizeStudent(raw: unknown): StudentRecord | null {
     id,
     username,
     profile: {
-      fullName: asText(profileRaw.fullName, username || 'Campus student'),
+      fullName: asText(profileRaw.fullName, username || 'Student'),
       photoUrl: asText(profileRaw.photoUrl) || null,
       course: asText(profileRaw.course),
     },
@@ -71,7 +71,7 @@ function extractStudents(result: unknown): DiscoverStudent[] {
 }
 
 function initialsFor(name: unknown, username: unknown): string {
-  const safeName = asText(name, asText(username, 'Campus student')).trim();
+  const safeName = asText(name, asText(username, 'Student')).trim();
   const initials = safeName
     .split(/\\s+/)
     .filter(Boolean)
@@ -169,12 +169,12 @@ export function ExplorePage({ posts, listings, search, setSearch, onProfile, onM
               const person = normalizeStudent(rawPerson);
               if (!person) return null;
               const username = asText(person.username);
-              const name = asText(person.profile?.fullName, username || 'Campus student');
+              const name = asText(person.profile?.fullName, username || 'Student');
               const initials = initialsFor(name, username);
               return (
                 <button className="explore-person card" key={asText(person.id, username)} onClick={() => username && onProfile(username)} disabled={!username}>
                   <Avatar initials={initials} image={person.profile?.photoUrl || undefined}/>
-                  <span><b>{name}</b><small>{username ? `@${username}` : 'Campus student'} · {asText(person.profile?.course, 'Student')}</small></span>
+                  <span><b>{name}</b><small>{username ? `@${username}` : 'Campus community'} · {asText(person.profile?.course, 'Student')}</small></span>
                   <ChevronRight size={16}/>
                 </button>
               );

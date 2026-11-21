@@ -65,7 +65,7 @@ export class AuthController {
   }
 
   @Get('me') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
-  me(@Req() req: AuthRequest) { return { user: { id: req.user.id, username: req.user.username } }; }
+  me(@Req() req: AuthRequest) { return this.auth.me(req.user.id); }
 
   @Get('sessions') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
   sessions(@Req() req: AuthRequest) { return this.auth.sessions(req.user.id); }

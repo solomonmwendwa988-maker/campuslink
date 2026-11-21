@@ -6,9 +6,12 @@ export class UpdateProfileDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^[a-zA-Z0-9._]{3,20}$/) username?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) bio?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) course?: string;
+  @ApiPropertyOptional({ description: 'Campus name within the current university.' }) @IsOptional() @IsString() @MaxLength(120) campus?: string;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) @Max(10) yearOfStudy?: number;
   @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray() @IsString({ each: true }) interests?: string[];
   @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray() @IsString({ each: true }) skills?: string[];
+  @ApiPropertyOptional({ description: 'Profile photo data URL or URL.' }) @IsOptional() @IsString() @MaxLength(1500000) photoUrl?: string | null;
+  @ApiPropertyOptional({ description: 'Profile cover data URL or URL.' }) @IsOptional() @IsString() @MaxLength(1500000) coverUrl?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isPrivate?: boolean;
 }
 

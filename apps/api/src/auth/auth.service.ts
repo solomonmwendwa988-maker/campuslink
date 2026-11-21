@@ -6,11 +6,17 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ChangePasswordDto, ConfirmPasswordDto, LoginDto, RegisterDto } from './dto.js';
 import { createOpaqueToken, hashOpaqueToken, hashPassword, verifyPassword } from './credentials.js';
 
-const safeUser = { id: true, email: true, username: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, interests: true, skills: true } } } satisfies Prisma.UserSelect;
+const safeUser = { id: true, email: true, username: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true } } } satisfies Prisma.UserSelect;
 
 @Injectable()
 export class AuthService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService, @Inject(JwtService) private readonly jwt: JwtService, @Inject(ConfigService) private readonly config: ConfigService) {}
+
+  async me(userId: string) {
+    const user = await this.prisma.user.findFirst({ where: { id: userId, deletedAt: null, deactivatedAt: null }, select: safeUser });
+    if (!user) throw new UnauthorizedException('Your session is no longer valid. Please sign in again.');
+    return { user };
+  }
 
   async register(dto: RegisterDto) {
     const email = dto.email.trim().toLowerCase();
@@ -22,7 +28,7 @@ export class AuthService {
     if (existing) throw new ConflictException(existing.email === email ? 'An account already exists for this email.' : 'That username is already taken.');
     const passwordHash = await hashPassword(dto.password);
     try {
-      const user = await this.prisma.user.create({ data: { email, username, passwordHash, profile: { create: { fullName: dto.name.trim(), universityId: campus.universityId, campusId: campus.id, course: dto.course.trim(), yearOfStudy: dto.year, bio: dto.bio?.trim() || null, interests: dto.interests ?? [], skills: dto.skills ?? [] } } }, select: safeUser });
+      const user = await this.prisma.user.create({ data: { email, username, passwordHash, profile: { create: { fullName: dto.name.trim(), universityId: campus.universityId, campusId: campus.id, course: dto.course.trim(), yearOfStudy: dto.year, bio: dto.bio?.trim() || null, photoUrl: dto.photoUrl ?? null, interests: dto.interests ?? [], skills: dto.skills ?? [] } } }, select: safeUser });
       return { user, emailVerified: false, verification: 'Email verification is not configured yet. Account is unverified.' };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('Email or username is already in use.');

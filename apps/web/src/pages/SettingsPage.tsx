@@ -9,7 +9,7 @@ import { optimizeImage } from '../services/imageProcessing';
 type ThemeMode = 'light' | 'dark' | 'system';
 type SettingsProps = {
   profile: StudentProfile;
-  onSaveProfile: (profile: StudentProfile) => void;
+  onSaveProfile: (profile: StudentProfile) => void | Promise<void>;
   dark?: boolean;
   setDark?: (value: boolean) => void;
   preferences: Record<string, boolean>;
@@ -57,16 +57,21 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
       setFeedback('Image ready to preview. Save profile to apply it.');
     }).catch(error => setFeedback(error instanceof Error ? error.message : 'Could not prepare that image.'));
   };
-  const saveProfile = (event: FormEvent) => {
+  const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
     if (!draft.name.trim() || !/^@?[a-zA-Z0-9._]{3,20}$/.test(draft.username)) {
       setFeedback('Enter your name and a valid 3–20 character username.');
       return;
     }
-    onSaveProfile({ ...draft, university: launchUniversity.name });
-    setSaved(true);
-    setFeedback('Profile changes saved in this browser.');
-    window.setTimeout(() => setSaved(false), 1800);
+    try {
+      await onSaveProfile({ ...draft, university: launchUniversity.name });
+      setSaved(true);
+      setFeedback('Profile changes saved to your account.');
+      window.setTimeout(() => setSaved(false), 1800);
+    } catch (error) {
+      setSaved(false);
+      setFeedback(error instanceof Error ? error.message : 'Could not save your profile.');
+    }
   };
   const isPreferenceEnabled = (key: string) => preferences[key] ?? !key.startsWith('show');
   const toggle = (key: string) => setPreferences({ ...preferences, [key]: !isPreferenceEnabled(key) });
@@ -92,7 +97,7 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
     const image = kind === 'avatarImage' ? draft.avatarImage : draft.coverImage;
     return <div className={`settings-photo-tools ${kind === 'coverImage' ? 'cover-tools' : ''}`}>
       {image ? <img className={kind === 'avatarImage' ? 'settings-avatar-preview' : 'settings-cover-preview'} src={image} alt={kind === 'avatarImage' ? 'Profile photo preview' : 'Cover photo preview'} style={kind === 'avatarImage' ? { objectPosition: `${draft.avatarCrop ?? 50}% center` } : undefined}/> : <span className={kind === 'avatarImage' ? 'settings-avatar-placeholder' : 'settings-cover-placeholder'}>{kind === 'avatarImage' ? <UserRound size={22}/> : 'No cover photo selected'}</span>}
-      <div><b>{kind === 'avatarImage' ? 'Profile photo' : 'Cover image'}</b><small>Optional · image stays in this browser preview</small><div className="settings-photo-actions"><button type="button" onClick={() => input.current?.click()}><Upload size={14}/>{image ? 'Replace' : 'Choose image'}</button><button type="button" onClick={() => cameraInput.current?.click()}><Camera size={14}/>Camera</button>{image && <button type="button" onClick={() => setDraft(current => ({ ...current, [kind]: undefined }))}>Remove</button>}</div></div>
+      <div><b>{kind === 'avatarImage' ? 'Profile photo' : 'Cover image'}</b><small>Optional · saved to your CampusLink profile</small><div className="settings-photo-actions"><button type="button" onClick={() => input.current?.click()}><Upload size={14}/>{image ? 'Replace' : 'Choose image'}</button><button type="button" onClick={() => cameraInput.current?.click()}><Camera size={14}/>Camera</button>{image && <button type="button" onClick={() => setDraft(current => ({ ...current, [kind]: undefined }))}>Remove</button>}</div></div>
       <input ref={input} className="visually-hidden-input" type="file" accept="image/*" onChange={event => updatePhoto(kind, event.target.files?.[0])}/>
       <input ref={cameraInput} className="visually-hidden-input" type="file" accept="image/*" capture="user" onChange={event => updatePhoto(kind, event.target.files?.[0])}/>
       {kind === 'avatarImage' && image && <label className="crop-control">Reposition <input aria-label="Reposition profile image" type="range" min="0" max="100" value={draft.avatarCrop ?? 50} onChange={event => setDraft(current => ({ ...current, avatarCrop: Number(event.target.value) }))}/></label>}
@@ -124,7 +129,7 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
         </form>
 
         <section className="card settings-card" id="settings-privacy"><h2><Shield size={18}/> Privacy &amp; messages</h2><p>Choose what appears publicly and who can contact you.</p>
-          <label className="settings-toggle"><span><b>Profile visibility</b><small>Make your profile visible to campus students</small></span><select value={draft.visibility} onChange={event => { const next = { ...draft, visibility: event.target.value as StudentProfile['visibility'] }; setDraft(next); onSaveProfile(next); }}><option>Public</option><option>Private</option></select></label>
+          <label className="settings-toggle"><span><b>Profile visibility</b><small>Make your profile visible to campus students</small></span><select value={draft.visibility} onChange={event => { const next = { ...draft, visibility: event.target.value as StudentProfile['visibility'] }; setDraft(next); void Promise.resolve(onSaveProfile(next)).then(() => setFeedback('Privacy setting saved.')).catch(error => setFeedback(error instanceof Error ? error.message : 'Could not save privacy setting.')); }}><option>Public</option><option>Private</option></select></label>
           {preferencesList.slice(0, 5).map(([key, title, detail]) => <label className="settings-toggle" key={key}><span><b>{title}</b><small>{detail}</small></span><input type="checkbox" checked={isPreferenceEnabled(key)} onChange={() => toggle(key)}/></label>)}
           <div className="settings-list-editor"><h3>Blocked students</h3><p>Blocked names are stored locally; blocking is not enforced by a server.</p><div><input value={blockDraft} onChange={event => setBlockDraft(event.target.value)} placeholder="Username"/><button type="button" onClick={() => addName('blocked')}>Add</button></div>{blocked.map(name => <button className="settings-chip" key={name} onClick={() => setBlocked(blocked.filter(item => item !== name))}>@{name} · remove</button>)}</div>
           <div className="settings-list-editor"><h3>Muted students</h3><p>Muted names are saved in this browser preview.</p><div><input value={muteDraft} onChange={event => setMuteDraft(event.target.value)} placeholder="Username"/><button type="button" onClick={() => addName('muted')}>Add</button></div>{muted.map(name => <button className="settings-chip" key={name} onClick={() => setMuted(muted.filter(item => item !== name))}>@{name} · remove</button>)}</div>

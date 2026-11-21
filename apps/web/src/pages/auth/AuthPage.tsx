@@ -174,6 +174,7 @@ export function AuthPage({
           bio: form.bio.trim(),
           interests: splitCommaValues(form.interests),
           skills: splitCommaValues(form.skills),
+          photoUrl: form.picture || undefined,
         };
 
         // Create a real account in the backend.

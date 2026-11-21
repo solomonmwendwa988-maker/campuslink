@@ -4,7 +4,7 @@ import { Avatar } from '../components/shared/Avatar';
 import { useLocalState } from '../hooks/useLocalState';
 import { StudentProfile } from './CorePages';
 import { Post } from '../types/post';
-import { ApiError, followStudent, getPublicProfile, unfollowStudent } from '../services/api';
+import { ApiError, followStudent, getPublicProfile, getOwnProfile, unfollowStudent } from '../services/api';
 
 type Listing = { id: number; title: string; price: string; campus: string; category: string; image: string; seller: string };
 type Counts = { posts?: number; follows?: number; followedBy?: number };
@@ -81,14 +81,21 @@ export function ProfilePage({ profile, posts, isOwn, username, viewerUsername, o
   const displayedProfile = ownView ? profile : remoteProfile ?? profile;
 
   useEffect(() => {
-    if (ownView || !username) {
+    if (ownView) {
+      let cancelled = false;
       setRemoteProfile(null);
       setCounts({});
       setProfileLoading(false);
       setProfileError('');
       setIsFollowing(false);
-      return;
+      const loadOwnCounts = async () => {
+        try { const result = await getOwnProfile(); if (!cancelled) setCounts(result.user.counts ?? {}); }
+        catch { /* Keep counts unavailable rather than showing invented values. */ }
+      };
+      void loadOwnCounts();
+      return () => { cancelled = true; };
     }
+    if (!username) { setRemoteProfile(null); setCounts({}); setProfileLoading(false); setProfileError(''); setIsFollowing(false); return; }
 
     let cancelled = false;
     setProfileLoading(true);
@@ -143,9 +150,9 @@ export function ProfilePage({ profile, posts, isOwn, username, viewerUsername, o
   };
 
   const isVisible = displayedProfile.visibility === 'Public' || ownView;
-  const displayPostsCount = ownView ? posts.length : (counts.posts ?? posts.length);
-  const displayFollowers = ownView ? undefined : counts.followedBy;
-  const displayFollowing = ownView ? undefined : counts.follows;
+  const displayPostsCount = counts.posts ?? posts.length;
+  const displayFollowers = counts.followedBy;
+  const displayFollowing = counts.follows;
 
   if (!ownView && profileLoading) return <section className="card empty-state profile-loading"><p>Loading student profile…</p></section>;
   if (!ownView && profileError) return <section className="card empty-state profile-loading"><UserRound size={24}/><h2>Profile unavailable</h2><p>{profileError}</p></section>;
