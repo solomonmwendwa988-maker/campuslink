@@ -4,3 +4,37 @@
   .top-actions { flex: 0 0 auto; gap: 14px; }
   .topbar .mobile-menu { width: 28px; min-width: 28px; }
 }
+
+/* Mobile layout hardening: prevent flex children and app headers from overflowing. */
+@media (max-width: 720px) {
+  html, body, #root { width: 100%; max-width: 100%; overflow-x: clip; }
+  .app-shell { width: 100%; min-width: 0; overflow-x: clip; }
+  .topbar { width: 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding-inline: 12px; }
+  .topbar .brand { flex: 0 1 auto; min-width: 0; max-width: min(48vw, 190px); overflow: hidden; white-space: nowrap; font-size: clamp(15px, 4.4vw, 19px); }
+  .topbar .brand > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+  .top-actions { min-width: 0; margin-left: auto; gap: clamp(6px, 2.2vw, 12px); }
+  .top-actions .icon-btn { width: 34px; min-width: 34px; height: 34px; }
+  .top-actions .profile-mini { min-width: 36px; width: 36px; height: 36px; padding: 0; }
+  .layout, .content, .feed-grid, .feed-grid > section, .page-heading > div, .profile-page, .profile-main, .profile-post-grid, .settings-sections { min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .layout { padding: 16px 12px calc(82px + env(safe-area-inset-bottom)); }
+  .page-heading { flex-wrap: wrap; width: 100%; }
+  .page-heading > div { flex: 1 1 180px; }
+  .page-heading .primary-btn { flex: 0 0 auto; }
+  .composer, .post-card, .profile-post, .about-card, .settings-card { min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .composer-footer, .composer-tools { min-width: 0; flex-wrap: wrap; gap: 8px; }
+  .composer-footer .primary-btn { max-width: 100%; }
+  .profile-top { flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+  .profile-actions { max-width: 100%; flex-wrap: wrap; }
+  .profile-main h1 { overflow-wrap: anywhere; font-size: clamp(21px, 6vw, 27px); }
+  .profile-facts { gap: 12px; }
+  .profile-tabs, .explore-tabs { max-width: 100%; }
+  .mobile-bottom-nav { box-sizing: border-box; min-width: 0; }
+  .mobile-bottom-nav button { flex: 1 1 0; min-width: 0; }
+}
+@media (max-width: 390px) {
+  .topbar { gap: 5px; padding-inline: 9px; }
+  .topbar .brand { max-width: 43vw; font-size: 15px; }
+  .top-actions { gap: 4px; }
+  .layout { padding-inline: 9px; }
+  .profile-actions button { font-size: 10px; padding: 7px 9px; }
+}

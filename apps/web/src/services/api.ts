@@ -277,6 +277,7 @@ export interface ApiMessage {
   clientMessageId?: string | null;
   content: string;
   readAt?: string | null;
+  deliveredAt?: string | null;
   createdAt: string;
   sender?: MessagingPerson;
   attachments?: Array<{ id: string; url: string; mediaType: string }>;
@@ -333,6 +334,27 @@ export async function discoverStudents(search = ''): Promise<DiscoverStudent[]> 
   const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
   const result = await request<{ data: DiscoverStudent[] }>(`/profiles/discover${query}`, { authenticated: true });
   return result.data ?? [];
+}
+
+
+export interface ApiNotification {
+  id: string;
+  type: 'LIKE' | 'COMMENT' | 'REPLY' | 'REPOST' | 'FOLLOW' | 'MESSAGE' | 'EVENT';
+  entityId?: string | null;
+  readAt?: string | null;
+  createdAt: string;
+  actor?: { id: string; username: string; profile?: { fullName?: string | null; photoUrl?: string | null } | null } | null;
+}
+
+export async function listNotifications(cursor?: string) {
+  const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return request<{ data: ApiNotification[]; nextCursor: string | null }>(`/notifications${suffix}`, { authenticated: true });
+}
+export async function markNotificationRead(id: string) {
+  return request<{ read: boolean }>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH', authenticated: true });
+}
+export async function markAllNotificationsRead() {
+  return request<{ markedRead: number }>('/notifications/read-all', { method: 'PATCH', authenticated: true });
 }
 
 /* =========================================================

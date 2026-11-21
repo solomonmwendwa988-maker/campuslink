@@ -227,6 +227,7 @@ model Message {
   clientMessageId String? @db.VarChar(100)
   content        String   @db.VarChar(5000)
   readAt         DateTime?
+  deliveredAt    DateTime?
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
   attachments    MessageAttachment[]

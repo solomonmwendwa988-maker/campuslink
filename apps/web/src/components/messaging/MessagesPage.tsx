@@ -60,13 +60,15 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
     try {
       const result = await getConversationMessages(conversationId);
       setMessages(result.data);
-      if (!quiet) await markConversationRead(conversationId).catch(() => undefined);
+      // Active conversation is continuously acknowledged, including background refreshes.
+      await markConversationRead(conversationId).catch(() => undefined);
+      await refreshConversations(true);
     } catch (err) {
       if (!quiet) setError(err instanceof Error ? err.message : 'Could not load messages.');
     } finally { if (!quiet) setLoadingMessages(false); }
-  }, []);
+  }, [refreshConversations]);
 
-  useEffect(() => { void refreshConversations(); }, []);
+  useEffect(() => { void refreshConversations(); }, [refreshConversations]);
   useEffect(() => {
     const username = (initialUsername ?? '').trim().replace(/^@/, '');
     if (!username || openedInitialUsername.current.toLowerCase() === username.toLowerCase()) return;
@@ -96,7 +98,7 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
     if (!selectedId) { setMessages([]); return; }
     void refreshMessages(selectedId);
     const timer = window.setInterval(() => {
-      void refreshConversations(true);
+      if (document.visibilityState !== 'visible') return;
       void refreshMessages(selectedId, true);
     }, 5000);
     return () => window.clearInterval(timer);
@@ -148,7 +150,7 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
         <div className="chat-scroll ig-chat-scroll" ref={scrollRef} aria-live="polite">
           <div className="chat-profile-intro"><Avatar initials={initials(personName(contact))} image={contact?.profile?.photoUrl ?? undefined}/><strong>{personName(contact)}</strong><span>@{contact?.username}</span><p>CampusLink · University community</p></div>
           {loadingMessages && messages.length === 0 && <div className="messages-loading">Loading messages…</div>}
-          {messages.map(message => { const mine = selected.participants.length > 0 && !selected.participants.some(p => p.id === message.senderId); return <div className={`ig-message-row${mine ? ' mine' : ''}`} key={message.id}><div className="chat-bubble ig-bubble">{message.content}<span className="chat-time">{timeLabel(message.createdAt)}</span></div></div>; })}
+          {messages.map(message => { const mine = selected.participants.length > 0 && !selected.participants.some(p => p.id === message.senderId); return <div className={`ig-message-row${mine ? ' mine' : ''}`} key={message.id}><div className="chat-bubble ig-bubble">{message.content}<span className="chat-time">{timeLabel(message.createdAt)}</span>{mine && <span className={`message-receipt${message.readAt ? ' seen' : message.deliveredAt ? ' delivered' : ''}`}>{message.readAt ? 'Seen' : message.deliveredAt ? 'Delivered' : 'Sent'}</span>}</div></div>; })}
           {!loadingMessages && messages.length === 0 && <div className="chat-empty-state"><b>Say hello to {personName(contact)}</b><span>You're connected. Start your conversation.</span></div>}
         </div>
         <form className="chat-send ig-chat-send" onSubmit={submitMessage}><input value={draft} onChange={event => setDraft(event.target.value)} placeholder="Message…" aria-label="Write a message" autoComplete="off"/><button type="submit" aria-label="Send message" disabled={!draft.trim() || sending}>{sending ? "Sending…" : <Send size={17}/>}</button></form>

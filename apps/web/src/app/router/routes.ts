@@ -22,6 +22,19 @@ export function pathForPage(page: string): string {
   return routes[page] ?? '/home';
 }
 
+export function pathForProfile(username: string): string {
+  const normalized = username.trim().replace(/^@/, '');
+  return normalized ? `/profile/${encodeURIComponent(normalized)}` : '/profile';
+}
+
+export function usernameFromPath(path: string): string | null {
+  const match = path.match(/^\/profile\/([^/]+)\/?$/i);
+  if (!match) return null;
+  try { return decodeURIComponent(match[1]).replace(/^@/, '') || null; }
+  catch { return null; }
+}
+
 export function pageFromPath(path: string): string {
-  return pages[path] ?? 'Landing';
+  if (usernameFromPath(path)) return 'Profile';
+  return pages[path.replace(/\/$/, '') || '/'] ?? 'Landing';
 }

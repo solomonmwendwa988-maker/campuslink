@@ -36,10 +36,12 @@ export class MessagingService {
 
   async list(userId: string) {
     const memberships = await this.prisma.conversationParticipant.findMany({ where: { userId }, include: { conversation: { include: conversationListInclude } }, orderBy: { conversation: { updatedAt: 'desc' } } });
-    const conversations = await Promise.all(memberships.map(async ({ conversation, lastReadAt }) => {
+    const conversationIds = memberships.map((membership) => membership.conversationId);
+    if (conversationIds.length) await this.prisma.message.updateMany({ where: { conversationId: { in: conversationIds }, senderId: { not: userId }, deliveredAt: null }, data: { deliveredAt: new Date() } });
+    const conversations = await Promise.all(memberships.map(async ({ conversation }) => {
       const other = conversation.participants.find((member) => member.userId !== userId);
       if (!other || await this.prisma.block.findFirst({ where: { OR: [{ blockerId: userId, blockedId: other.userId }, { blockerId: other.userId, blockedId: userId }] } })) return null;
-      const unreadCount = await this.prisma.message.count({ where: { conversationId: conversation.id, senderId: { not: userId }, readAt: null, ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}) } });
+      const unreadCount = await this.prisma.message.count({ where: { conversationId: conversation.id, senderId: { not: userId }, readAt: null } });
       return { id: conversation.id, participants: conversation.participants.filter((member) => member.userId !== userId).map((member) => member.user), lastMessage: conversation.messages[0] ?? null, unreadCount, updatedAt: conversation.updatedAt };
     }));
     return { data: conversations.filter((conversation): conversation is NonNullable<typeof conversation> => conversation !== null) };
@@ -69,6 +71,11 @@ export class MessagingService {
 
   async history(userId: string, conversationId: string, cursor?: string) {
     await this.authorize(userId, conversationId);
+    // A recipient opening/polling the conversation is the durable delivery acknowledgement.
+    await this.prisma.message.updateMany({
+      where: { conversationId, senderId: { not: userId }, deliveredAt: null },
+      data: { deliveredAt: new Date() },
+    });
     const rows = await this.prisma.message.findMany({ where: { conversationId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: pageSize + 1, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}), include: messageInclude });
     const hasMore = rows.length > pageSize; const data = rows.slice(0, pageSize).reverse();
     return { data, nextCursor: hasMore ? rows[pageSize]?.id ?? null : null };
@@ -101,10 +108,16 @@ export class MessagingService {
   async markRead(userId: string, conversationId: string) {
     await this.authorize(userId, conversationId);
     const now = new Date();
-    await this.prisma.$transaction([
-      this.prisma.message.updateMany({ where: { conversationId, senderId: { not: userId }, readAt: null }, data: { readAt: now } }),
-      this.prisma.conversationParticipant.update({ where: { conversationId_userId: { conversationId, userId } }, data: { lastReadAt: now } }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      const unread = await tx.message.findMany({
+        where: { conversationId, senderId: { not: userId }, readAt: null },
+        select: { id: true },
+      });
+      const messageIds = unread.map((message) => message.id);
+      await tx.message.updateMany({ where: { conversationId, senderId: { not: userId }, readAt: null }, data: { readAt: now, deliveredAt: now } });
+      await tx.conversationParticipant.update({ where: { conversationId_userId: { conversationId, userId } }, data: { lastReadAt: now } });
+      if (messageIds.length) await tx.notification.updateMany({ where: { recipientId: userId, type: 'MESSAGE', entityId: { in: messageIds }, readAt: null }, data: { readAt: now } });
+    });
     return { readAt: now.toISOString() };
   }
 }
