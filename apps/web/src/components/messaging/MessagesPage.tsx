@@ -4,8 +4,51 @@ import { Avatar } from '../shared/Avatar';
 import { ApiConversation, ApiMessage, listConversations, getConversationMessages, sendConversationMessage, markConversationRead, startConversation, sendVoiceMessage, blockUser, reportUser, muteConversation, unmuteConversation, getPresence, setConversationTyping, getConversationTyping } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { pathForProfile } from '../../app/router/routes';
-import { ConfirmDialog, ReportDialog } from '../shared/ConfirmDialog';
 
+
+
+const INBOX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const MESSAGE_CACHE_LIMIT = 100;
+
+function inboxCacheKey(scope: string) {
+  return `campuslink:inbox:v2:${encodeURIComponent(scope || 'unknown')}`;
+}
+function messageCacheKey(scope: string, conversationId: string) {
+  return `campuslink:messages:v2:${encodeURIComponent(scope || 'unknown')}:${conversationId}`;
+}
+function readInboxCache(scope: string): ApiConversation[] {
+  try {
+    const raw = localStorage.getItem(inboxCacheKey(scope));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { savedAt?: number; data?: ApiConversation[] };
+    if (!parsed.savedAt || Date.now() - parsed.savedAt > INBOX_CACHE_TTL || !Array.isArray(parsed.data)) return [];
+    return parsed.data.filter(item => item && typeof item.id === 'string' && Array.isArray(item.participants)).slice(0, 100);
+  } catch { return []; }
+}
+function writeInboxCache(scope: string, data: ApiConversation[]) {
+  try {
+    localStorage.setItem(inboxCacheKey(scope), JSON.stringify({ savedAt: Date.now(), data: data.slice(0, 100) }));
+  } catch { /* storage quota/private mode: live inbox remains functional */ }
+}
+function readMessageCache(scope: string, conversationId: string): ApiMessage[] {
+  try {
+    const raw = localStorage.getItem(messageCacheKey(scope, conversationId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { savedAt?: number; data?: ApiMessage[] };
+    if (!parsed.savedAt || Date.now() - parsed.savedAt > INBOX_CACHE_TTL || !Array.isArray(parsed.data)) return [];
+    return parsed.data.filter(message => message && typeof message.id === 'string').slice(-MESSAGE_CACHE_LIMIT);
+  } catch { return []; }
+}
+function writeMessageCache(scope: string, conversationId: string, data: ApiMessage[]) {
+  try {
+    localStorage.setItem(messageCacheKey(scope, conversationId), JSON.stringify({ savedAt: Date.now(), data: data.slice(-MESSAGE_CACHE_LIMIT) }));
+  } catch { /* cache is optional */ }
+}
+function mergeMessages(existing: ApiMessage[], incoming: ApiMessage[]) {
+  const map = new Map<string, ApiMessage>();
+  for (const message of [...existing, ...incoming]) map.set(message.id, message);
+  return [...map.values()].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()).slice(-MESSAGE_CACHE_LIMIT);
+}
 
 function personName(person?: ApiConversation['participants'][number]) {
   return person?.profile?.fullName?.trim() || person?.username || 'Student';
@@ -13,31 +56,6 @@ function personName(person?: ApiConversation['participants'][number]) {
 function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase() ?? '').join('') || 'S';
 }
-const INBOX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
-function inboxCacheKey(scope?: string) {
-  const normalized = (scope ?? '').trim().toLowerCase();
-  return normalized ? `campuslink:inbox:v2:${normalized}` : null;
-}
-function readInboxCache(scope?: string): ApiConversation[] {
-  const key = inboxCacheKey(scope);
-  if (!key || typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return [];
-    const cache = JSON.parse(raw) as { savedAt?: number; data?: ApiConversation[] };
-    if (!Array.isArray(cache.data) || !cache.savedAt || Date.now() - cache.savedAt > INBOX_CACHE_TTL) {
-      window.localStorage.removeItem(key);
-      return [];
-    }
-    return cache.data;
-  } catch { return []; }
-}
-function writeInboxCache(scope: string | undefined, data: ApiConversation[]) {
-  const key = inboxCacheKey(scope);
-  if (!key || typeof window === 'undefined') return;
-  try { window.localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data })); } catch { /* Storage may be full or disabled; inbox remains usable. */ }
-}
-
 function timeLabel(date?: string) {
   if (!date) return '';
   const value = new Date(date);
@@ -48,9 +66,12 @@ function timeLabel(date?: string) {
   return value.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function MessagesPage({ initialUsername, onInitialHandled, cacheScope }: { initialUsername?: string; onInitialHandled?: () => void; cacheScope?: string }) {
+export function MessagesPage({ cacheScope = 'anonymous', initialUsername, onInitialHandled }: { cacheScope?: string; initialUsername?: string; onInitialHandled?: () => void }) {
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<ApiConversation[]>(() => readInboxCache(cacheScope));
+  const inboxRequestRef = useRef(0);
+  const inboxAbortRef = useRef<AbortController | null>(null);
+  const messageRequestRef = useRef(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [search, setSearch] = useState('');
@@ -59,17 +80,10 @@ export function MessagesPage({ initialUsername, onInitialHandled, cacheScope }: 
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [loadingList, setLoadingList] = useState(() => readInboxCache(cacheScope).length === 0);
-  const inboxRequestVersion = useRef(0);
-  const conversationsRef = useRef(conversations);
-  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
-  const [inboxError, setInboxError] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
-  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
-  const [reportDialogOpen, setReportDialogOpen] = useState(false);
-  const [dialogBusy, setDialogBusy] = useState(false);
   const [recording, setRecording] = useState(false);
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
   const [voicePreviewUrl, setVoicePreviewUrl] = useState<string | null>(null);
@@ -95,52 +109,79 @@ export function MessagesPage({ initialUsername, onInitialHandled, cacheScope }: 
   }), [conversations, search]);
 
   const refreshConversations = useCallback(async (quiet = false) => {
-    const requestVersion = ++inboxRequestVersion.current;
-    const hasCachedData = conversationsRef.current.length > 0;
-    if (!quiet && !hasCachedData) { setLoadingList(true); setInboxError(''); }
-    let timeoutId: number | undefined;
+    const requestId = ++inboxRequestRef.current;
+    inboxAbortRef.current?.abort();
     const controller = new AbortController();
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = window.setTimeout(() => {
-        controller.abort();
-        reject(new Error('INBOX_REQUEST_TIMEOUT'));
-      }, 9000);
-    });
+    inboxAbortRef.current = controller;
+    const hasCache = readInboxCache(cacheScope).length > 0;
+    if (!quiet && !hasCache) setLoadingList(true);
+    let timeoutId: number | undefined;
     try {
-      // Race the fetch against a hard timeout. Abort alone is not enough on some
-      // mobile browsers/proxies, which may leave a request pending indefinitely.
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          controller.abort();
+          reject(new Error('Inbox connection timed out. Please retry.'));
+        }, 12000);
+      });
       const result = await Promise.race([listConversations(controller.signal), timeout]);
-      if (requestVersion !== inboxRequestVersion.current) return;
-      const fresh = Array.isArray(result.data) ? result.data : [];
-      setConversations(fresh);
-      writeInboxCache(cacheScope, fresh);
-      setSelectedId(current => current && fresh.some(item => item.id === current) ? current : null);
-      setError(''); setInboxError('');
+      if (requestId !== inboxRequestRef.current || controller.signal.aborted) return;
+      const safeData = Array.isArray(result?.data) ? result.data : [];
+      setConversations(safeData);
+      writeInboxCache(cacheScope, safeData);
+      setSelectedId(current => current && safeData.some(item => item.id === current) ? current : null);
+      setError('');
     } catch (err) {
-      if (requestVersion !== inboxRequestVersion.current) return;
-      const message = err instanceof Error && err.message === 'INBOX_REQUEST_TIMEOUT'
-        ? 'CampusLink could not reach the inbox in time. Your saved conversations are kept; retry when your connection is ready.'
-        : err instanceof Error ? err.message : 'Could not refresh conversations.';
-      if (!quiet || hasCachedData) { setInboxError(message); setError(''); }
+      if (requestId !== inboxRequestRef.current) return;
+      const cached = readInboxCache(cacheScope);
+      if (cached.length) setConversations(cached);
+      setError(err instanceof Error ? err.message : 'Could not load conversations. Check your connection and retry.');
     } finally {
-      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-      if (requestVersion === inboxRequestVersion.current && !quiet) setLoadingList(false);
+      if (requestId === inboxRequestRef.current && !quiet) setLoadingList(false);
     }
   }, [cacheScope]);
-
   const refreshMessages = useCallback(async (conversationId: string, quiet = false, acknowledge = false) => {
-    if (!quiet) setLoadingMessages(true);
+    const requestId = ++messageRequestRef.current;
+    const cached = readMessageCache(cacheScope, conversationId);
+    if (!quiet && cached.length) {
+      setMessages(cached);
+      setLoadingMessages(false);
+    } else if (!quiet) {
+      setLoadingMessages(true);
+    }
+    const controller = new AbortController();
+    let timeoutId: number | undefined;
     try {
-      const result = await getConversationMessages(conversationId);
-      setMessages(result.data);
-      // Read receipts are sent only when the user explicitly opens this conversation.
-      if (acknowledge) { await markConversationRead(conversationId).catch(() => undefined); await refreshConversations(true); }
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          controller.abort();
+          reject(new Error('Message loading timed out. Please retry.'));
+        }, 12000);
+      });
+      const result = await Promise.race([getConversationMessages(conversationId, undefined, controller.signal), timeout]);
+      if (requestId !== messageRequestRef.current) return;
+      const merged = mergeMessages(cached, result.data);
+      setMessages(current => mergeMessages(current, result.data));
+      writeMessageCache(cacheScope, conversationId, merged);
+      if (acknowledge) {
+        await markConversationRead(conversationId).catch(() => undefined);
+        await refreshConversations(true);
+      }
     } catch (err) {
-      if (!quiet) setError(err instanceof Error ? err.message : 'Could not load messages.');
-    } finally { if (!quiet) setLoadingMessages(false); }
-  }, [refreshConversations]);
+      if (requestId === messageRequestRef.current && !quiet) setError(err instanceof Error ? err.message : 'Could not load messages. Please retry.');
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
+      if (requestId === messageRequestRef.current && !quiet) setLoadingMessages(false);
+    }
+  }, [cacheScope, refreshConversations]);
 
-  useEffect(() => { void refreshConversations(); }, [refreshConversations]);
+  useEffect(() => {
+    const cached = readInboxCache(cacheScope);
+    if (cached.length) { setConversations(cached); setLoadingList(false); }
+    else setLoadingList(true);
+    setError('');
+    void refreshConversations(false);
+    return () => { inboxAbortRef.current?.abort(); };
+  }, [cacheScope, refreshConversations]);
   useEffect(() => {
     const username = (initialUsername ?? '').trim().replace(/^@/, '');
     if (!username || openedInitialUsername.current.toLowerCase() === username.toLowerCase()) return;
@@ -177,8 +218,11 @@ export function MessagesPage({ initialUsername, onInitialHandled, cacheScope }: 
   // Acknowledge read status only when the conversation selection changes (explicit open).
   useEffect(() => {
     if (!selectedId) { setMessages([]); return; }
-    void refreshMessages(selectedId, false, true);
-  }, [selectedId, refreshMessages]);
+    const cached = readMessageCache(cacheScope, selectedId);
+    if (cached.length) { setMessages(cached); setLoadingMessages(false); }
+    else { setMessages([]); setLoadingMessages(true); }
+    void refreshMessages(selectedId, cached.length > 0, true);
+  }, [selectedId, cacheScope, refreshMessages]);
   // Poll only the open chat while the tab is visible. Inbox refresh is separate and slower.
   useEffect(() => {
     if (!selectedId) return;
@@ -214,7 +258,7 @@ export function MessagesPage({ initialUsername, onInitialHandled, cacheScope }: 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [messages.length, selectedId]);
 
   const openConversation = (id: string) => {
-    setSelectedId(id); setMobileChatOpen(true); setMessages([]); setLoadingMessages(true); setContactMenuOpen(false); setVoiceBlob(null); setVoicePreviewUrl(null); setError('');
+    setSelectedId(id); setMobileChatOpen(true); setMessages(readMessageCache(cacheScope, id)); setLoadingMessages(readMessageCache(cacheScope, id).length === 0); setContactMenuOpen(false); setVoiceBlob(null); setVoicePreviewUrl(null); setError('');
     if (window.matchMedia('(max-width: 720px)').matches) window.history.pushState({ campuslinkConversation: id }, '', `${window.location.pathname}#conversation`);
   };
   const back = () => { if (window.location.hash === '#conversation') window.history.back(); else setMobileChatOpen(false); };
@@ -225,7 +269,9 @@ export function MessagesPage({ initialUsername, onInitialHandled, cacheScope }: 
     setSending(true); setError(''); const clientMessageId = crypto.randomUUID();
     try {
       const result = await sendConversationMessage(selectedId, content, clientMessageId);
-      setMessages(current => current.some(message => message.id === result.message.id) ? current : [...current, result.message]);
+      const updatedMessages = mergeMessages(messages, [result.message]);
+      setMessages(updatedMessages);
+      writeMessageCache(cacheScope, selectedId, updatedMessages);
       handleDraftChange(''); void refreshConversations(true);
     } catch (err) { setError(err instanceof Error ? err.message : 'Message failed to send. Please retry.'); }
     finally { setSending(false); }
@@ -239,14 +285,12 @@ export function MessagesPage({ initialUsername, onInitialHandled, cacheScope }: 
 
   const openContactProfile = () => { if (contact?.username) navigate(pathForProfile(contact.username)); };
   const toggleMute = async () => { if (!selectedId) return; try { if (muted) await unmuteConversation(selectedId); else await muteConversation(selectedId); await refreshConversations(true); setContactMenuOpen(false); } catch (err) { setError(err instanceof Error ? err.message : 'Could not update conversation mute setting.'); } };
-  const handleBlock = () => { if (contact?.id) setBlockDialogOpen(true); };
-  const confirmBlock = async () => { if (!contact?.id) return; setDialogBusy(true); try { await blockUser(contact.id); setBlockDialogOpen(false); setContactMenuOpen(false); setSelectedId(null); setMobileChatOpen(false); await refreshConversations(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not block this user.'); } finally { setDialogBusy(false); } };
-  const handleReport = () => { if (contact?.id) setReportDialogOpen(true); };
-  const submitReport = async (details: string) => { if (!contact?.id) return; setDialogBusy(true); try { await reportUser(contact.id, 'OTHER', details || undefined); setReportDialogOpen(false); setContactMenuOpen(false); setError('Report submitted for review.'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not submit report.'); } finally { setDialogBusy(false); } };
+  const handleBlock = async () => { if (!contact?.id || !window.confirm(`Block @${contact.username}? They will no longer be able to message you.`)) return; try { await blockUser(contact.id); setContactMenuOpen(false); setSelectedId(null); setMobileChatOpen(false); await refreshConversations(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not block this user.'); } };
+  const handleReport = async () => { if (!contact?.id) return; const details = window.prompt('Tell us what happened (optional).'); if (details === null) return; try { await reportUser(contact.id, 'OTHER', details.trim() || undefined); setContactMenuOpen(false); setError('Report submitted for review.'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not submit report.'); } };
   const beginVoiceRecording = async () => { if (recording || voiceSending) return; if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { setError('Voice recording is not supported in this browser.'); return; } try { const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); streamRef.current = stream; voiceChunksRef.current = []; const mime = ['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(type => MediaRecorder.isTypeSupported(type)); const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); recorderRef.current = recorder; recorder.ondataavailable = event => { if (event.data.size) voiceChunksRef.current.push(event.data); }; recorder.onstop = () => { const blob = new Blob(voiceChunksRef.current, { type: recorder.mimeType || 'audio/webm' }); if (blob.size) { setVoiceBlob(blob); const url = URL.createObjectURL(blob); setVoicePreviewUrl(url); } stream.getTracks().forEach(track => track.stop()); streamRef.current = null; setRecording(false); if (recordTimerRef.current) window.clearInterval(recordTimerRef.current); recordTimerRef.current = null; }; recorder.start(500); setRecording(true); setRecordSeconds(0); recordTimerRef.current = window.setInterval(() => setRecordSeconds(seconds => { if (seconds >= 119) { recorderRef.current?.stop(); return 120; } return seconds + 1; }), 1000); } catch { setError('Microphone access was denied or unavailable. Allow microphone permission and try again.'); } };
   const stopVoiceRecording = () => { if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop(); };
   const cancelVoiceRecording = () => { if (recorderRef.current && recorderRef.current.state !== 'inactive') { recorderRef.current.ondataavailable = null; recorderRef.current.onstop = null; recorderRef.current.stop(); } streamRef.current?.getTracks().forEach(track => track.stop()); streamRef.current = null; setRecording(false); setVoiceBlob(null); if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl); setVoicePreviewUrl(null); if (recordTimerRef.current) window.clearInterval(recordTimerRef.current); recordTimerRef.current = null; };
-  const sendVoice = async () => { if (!selectedId || !voiceBlob || voiceSending) return; setVoiceSending(true); setError(''); try { const result = await sendVoiceMessage(selectedId, voiceBlob, crypto.randomUUID()); setMessages(current => current.some(message => message.id === result.message.id) ? current : [...current, result.message]); cancelVoiceRecording(); void refreshConversations(true); } catch (err) { setError(err instanceof Error ? err.message : 'Voice message upload failed.'); } finally { setVoiceSending(false); } };
+  const sendVoice = async () => { if (!selectedId || !voiceBlob || voiceSending) return; setVoiceSending(true); setError(''); try { const result = await sendVoiceMessage(selectedId, voiceBlob, crypto.randomUUID()); const updatedMessages = mergeMessages(messages, [result.message]); setMessages(updatedMessages); writeMessageCache(cacheScope, selectedId, updatedMessages); cancelVoiceRecording(); void refreshConversations(true); } catch (err) { setError(err instanceof Error ? err.message : 'Voice message upload failed.'); } finally { setVoiceSending(false); } };
   useEffect(() => () => { streamRef.current?.getTracks().forEach(track => track.stop()); if (recordTimerRef.current) window.clearInterval(recordTimerRef.current); if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl); }, [voicePreviewUrl]);
   const formatDuration = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
 
@@ -255,13 +299,10 @@ export function MessagesPage({ initialUsername, onInitialHandled, cacheScope }: 
       <header className="conversation-list-header"><div><h1>Messages</h1><span className="inbox-subtitle">Your campus conversations</span></div><button className="new-message-btn" onClick={() => setNewChatOpen(open => !open)} title="New message" aria-label="New message"><Plus size={19}/></button></header>
       <label className="message-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search conversations" aria-label="Search conversations"/><button type="button" onClick={() => setSearch('')} aria-label="Clear search"><X size={15}/></button></label>
       {newChatOpen && <form className="new-chat-form" onSubmit={createChat}><input value={newUsername} onChange={event => setNewUsername(event.target.value)} placeholder="Student username" autoFocus/><button type="submit" disabled={!newUsername.trim()}>Start</button></form>}
-      {error && <div className="messages-error" role="alert">{error}</div>}
-      {inboxError && conversations.length > 0 && <div className="inbox-stale-notice" role="status"><span>{inboxError}</span><button type="button" onClick={() => void refreshConversations()}>Refresh</button></div>}
-
-      <div className="conversation-items" aria-live="polite">
-        {loadingList && conversations.length === 0 && <div className="inbox-loading" role="status"><span className="inbox-loading-spinner"/><strong>Loading conversations</strong><span>Connecting to your inbox…</span></div>}
-        {!loadingList && inboxError && conversations.length === 0 && <div className="inbox-load-error" role="alert"><MessageCircle size={24}/><strong>Couldn't load your inbox</strong><span>{inboxError}</span><button type="button" onClick={() => void refreshConversations()}>Try again</button></div>}
-        {!loadingList && !inboxError && conversations.length === 0 && <div className="inbox-empty"><MessageCircle size={25}/><strong>Your messages are waiting</strong><span>Start a conversation with a student from Explore.</span><button onClick={() => setNewChatOpen(true)}>New message</button></div>}
+       {error && <div className="messages-error" role="alert"><span>{error}</span><button type="button" onClick={() => void (mobileChatOpen && selectedId ? refreshMessages(selectedId, false, true) : refreshConversations(false))}>Retry</button></div>}
+      <div className="conversation-items">
+        {loadingList && conversations.length === 0 && <div className="inbox-skeleton" aria-label="Loading conversations">{Array.from({length:4},(_,i)=><div className="inbox-skeleton-row" key={i}><span className="skeleton skeleton-avatar"/><span className="skeleton skeleton-line"/><span className="skeleton skeleton-time"/></div>)}</div>}
+        {!loadingList && conversations.length === 0 && <div className="inbox-empty"><MessageCircle size={25}/><strong>Your messages are waiting</strong><span>Start a conversation with a student from Explore.</span><button onClick={() => setNewChatOpen(true)}>New message</button></div>}
         {filtered.map(item => { const student = item.participants[0]; const title = personName(student); const last = item.lastMessage; const isMine = Boolean(last && item.participants.every(p => p.id !== last.senderId)); return <button className={`conversation ig-conversation${selectedId === item.id ? ' selected' : ''}`} key={item.id} onClick={() => openConversation(item.id)}>
           <span className={`conversation-avatar${student && onlineUsers.has(student.id) ? ' is-online' : ''}`}><Avatar initials={initials(title)} image={student?.profile?.photoUrl ?? undefined}/>{student && onlineUsers.has(student.id) && <i aria-label="Online" title="Online"/>}</span><span className="conversation-details"><strong>{title}</strong><small>{last ? `${isMine ? 'You: ' : ''}${last.content}` : 'Start a conversation'}</small></span><span className="conversation-meta"><small>{timeLabel(last?.createdAt ?? item.updatedAt)}</small>{item.unreadCount > 0 && <b>{item.unreadCount}</b>}</span>
         </button>})}
@@ -281,7 +322,5 @@ export function MessagesPage({ initialUsername, onInitialHandled, cacheScope }: 
         <form className="chat-send ig-chat-send" onSubmit={submitMessage}>{voiceBlob&&voicePreviewUrl?<div className="voice-preview"><audio controls src={voicePreviewUrl}/><span>{formatDuration(recordSeconds)}</span><button type="button" onClick={cancelVoiceRecording} aria-label="Discard recording"><X size={16}/></button><button type="button" onClick={sendVoice} disabled={voiceSending}>{voiceSending?'Uploading…':'Send voice'}</button></div>:recording?<div className="voice-recording-controls"><span className="recording-dot"/><b>{formatDuration(recordSeconds)}</b><span>Recording voice message</span><button type="button" onClick={cancelVoiceRecording} aria-label="Cancel recording"><X size={17}/></button><button type="button" onClick={stopVoiceRecording} aria-label="Stop recording"><Square size={16}/></button></div>:<><input value={draft} onChange={event => handleDraftChange(event.target.value)} placeholder="Message…" aria-label="Write a message" autoComplete="off"/><button type="button" className="voice-record-button" onClick={beginVoiceRecording} aria-label="Record voice message"><Mic size={17}/></button><button type="submit" aria-label="Send message" disabled={!draft.trim() || sending}>{sending ? "Sending…" : <Send size={17}/>}</button></>}</form>
       </>}
     </section>
-    <ConfirmDialog open={blockDialogOpen} title={`Block @${contact?.username ?? 'user'}?`} description="They will no longer be able to message you." confirmLabel="Block user" tone="danger" busy={dialogBusy} onCancel={() => setBlockDialogOpen(false)} onConfirm={confirmBlock}/>
-    <ReportDialog open={reportDialogOpen} username={contact?.username ?? 'user'} busy={dialogBusy} onCancel={() => setReportDialogOpen(false)} onSubmit={submitReport}/>
   </div>;
 }

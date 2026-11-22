@@ -313,9 +313,9 @@ export async function startConversation(username: string) {
     method: 'POST', authenticated: true, body: JSON.stringify({ username }),
   });
 }
-export async function getConversationMessages(conversationId: string, cursor?: string) {
+export async function getConversationMessages(conversationId: string, cursor?: string, signal?: AbortSignal) {
   const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
-  return request<{ data: ApiMessage[]; nextCursor: string | null }>(`/messages/conversations/${encodeURIComponent(conversationId)}/messages${suffix}`, { authenticated: true });
+  return request<{ data: ApiMessage[]; nextCursor: string | null }>(`/messages/conversations/${encodeURIComponent(conversationId)}/messages${suffix}`, { authenticated: true, signal });
 }
 export async function sendConversationMessage(conversationId: string, content: string, clientMessageId: string) {
   return request<{ message: ApiMessage; duplicate?: boolean }>(`/messages/conversations/${encodeURIComponent(conversationId)}/messages`, {

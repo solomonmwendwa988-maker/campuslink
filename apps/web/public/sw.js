@@ -1,8 +1,8 @@
-const CACHE_NAME = 'campuslink-shell-v3';
+const CACHE_NAME = 'campuslink-shell-v4';
 const APP_SHELL = ['/offline.html', '/manifest.webmanifest', '/brand/campuslink-symbol.svg', '/brand/campuslink-logo.svg', '/icons/icon-192.svg', '/icons/icon-512.svg'];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {
