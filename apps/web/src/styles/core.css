@@ -97,3 +97,52 @@ body{background:var(--bg);color:var(--text)}
 .campus-edit-post-dialog textarea{width:100%;min-height:130px;resize:vertical;padding:13px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--text);font:inherit;line-height:1.6;outline:none}
 .campus-edit-post-dialog textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
 @media(max-width:640px){.profile-page-v2 .profile-cover{height:145px;padding:14px}.profile-page-v2 .profile-main{padding:0 13px 18px}.profile-page-v2 .profile-top{margin-top:-29px;align-items:flex-start}.profile-page-v2 .profile-top>.avatar{width:76px;height:76px;border-radius:22px}.profile-page-v2 .profile-actions{width:100%;justify-content:flex-start}.profile-page-v2 .profile-actions button{flex:1;min-width:0;padding:0 8px;min-height:39px;font-size:11px}.profile-page-v2 .profile-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.profile-page-v2 .profile-facts span{min-width:0;padding:10px 8px;text-align:center;align-items:center}.profile-page-v2 .profile-facts b{font-size:16px}.profile-page-v2 .profile-post-grid{grid-template-columns:1fr;gap:10px}.profile-page-v2 .profile-post img{height:190px}.profile-page-v2 .profile-tabs button{padding:0 10px;font-size:11px}.profile-page-v2 .about-card dl{grid-template-columns:100px minmax(0,1fr)}}
+
+/* Phase 2.3 — profile connections and media tab */
+.profile-page-v2 .profile-stat-button{appearance:none;border:1px solid var(--line);cursor:pointer;text-align:left;transition:border-color .18s,transform .18s,background .18s}
+.profile-page-v2 .profile-stat-button:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--bg));transform:translateY(-1px)}
+.profile-page-v2 .profile-stat-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.profile-connections-overlay{z-index:1001}
+.profile-connections-dialog{width:min(480px,calc(100vw - 28px));max-height:min(82vh,640px);overflow:auto;padding:22px 20px 16px;position:relative}
+.profile-connections-heading{text-align:center;padding:5px 8px 17px}
+.profile-connections-icon{display:inline-grid;place-items:center;width:46px;height:46px;border-radius:15px;background:color-mix(in srgb,var(--accent) 13%,var(--panel));color:var(--accent);margin-bottom:8px}
+.profile-connections-heading h2{margin:4px 0 6px;font:650 20px 'Space Grotesk'}
+.profile-connections-heading p{margin:0;color:var(--muted);font-size:12px}
+.profile-connections-list{display:grid;gap:4px;max-height:48vh;overflow:auto;padding:4px}
+.profile-connection-row{display:flex;align-items:center;gap:11px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+.profile-connection-row>span:last-child{display:grid;gap:3px;min-width:0}
+.profile-connection-row b{font-size:12px;overflow-wrap:anywhere}
+.profile-connection-row small{font-size:10px;color:var(--muted)}
+.profile-connections-state,.profile-connections-note{min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:20px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);font-size:12px}
+.profile-connections-state p,.profile-connections-note p{margin:0;max-width:300px;line-height:1.55}
+.profile-connections-state svg,.profile-connections-note svg{color:var(--accent)}
+.profile-connections-dialog .campus-dialog-actions{justify-content:flex-end;margin-top:16px}
+@media(max-width:640px){.profile-connections-dialog{padding:18px 14px 13px}.profile-connections-heading h2{font-size:18px}.profile-connection-row{padding:9px}}
+.profile-page-v2 .profile-facts .profile-stat{min-width:108px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--bg);display:flex;flex-direction:column;gap:3px;color:var(--muted);font-size:11px}
+.profile-page-v2 .profile-facts .profile-stat b{font-size:18px;color:var(--text);font-weight:750;letter-spacing:-.3px}
+.profile-page-v2 .profile-facts .profile-stat-button{font-family:inherit}
+.profile-connections-search{width:100%;height:42px;padding:0 12px;border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--text);outline:none;margin:0 0 10px;font-size:12px}
+.profile-connections-search:focus{border-color:var(--accent)}
+.profile-load-more{display:flex;width:100%;justify-content:center;margin-top:10px}
+.profile-page-v2 .profile-tabs button{transition:color .15s,background .15s}
+.profile-page-v2 .profile-post p{line-height:1.6;padding:0 13px;overflow-wrap:anywhere}
+.profile-page-v2 .profile-post small{display:block;padding:0 13px 12px;color:var(--muted);font-size:10px}
+.profile-page-v2 .profile-post img{display:block;width:100%;object-fit:cover}
+/* Explore discovery card polish for Phase 2.3 */
+.kabianga-explore-section{margin:22px 0 28px;min-width:0}
+.kabianga-explore-section .section-title{align-items:center;gap:12px;font-size:16px;margin:24px 0 12px}
+.kabianga-explore-section .section-title>span{display:flex;align-items:center;gap:8px}
+.kabianga-explore-section .section-title small{color:var(--muted);font-size:10px;font-weight:500}
+.kabianga-explore .explore-tabs button{transition:background .16s,border-color .16s,color .16s}
+.kabianga-explore .explore-person{border:1px solid var(--line);border-radius:14px;background:var(--panel);margin:7px 0;transition:border-color .18s,transform .18s,background .18s}
+.kabianga-explore .explore-person:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));transform:translateY(-1px);background:var(--panel2)}
+.kabianga-explore .explore-person>span{min-width:0}
+.kabianga-explore .explore-person b{font-size:12px;overflow-wrap:anywhere}
+.kabianga-explore .explore-person small{line-height:1.45}
+.kabianga-explore .explore-post{border-radius:14px;background:var(--panel);border:1px solid var(--line);transition:border-color .16s,transform .16s}
+.kabianga-explore .explore-post:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--line));transform:translateY(-1px)}
+.kabianga-explore .explore-post p{font-size:13px;line-height:1.6;overflow-wrap:anywhere;margin:12px 0}
+.kabianga-explore .explore-post>span{border-top:1px solid var(--line);padding-top:10px;font-size:11px}
+.kabianga-explore .explore-product{border-radius:13px;background:var(--panel);border:1px solid var(--line);transition:border-color .16s,transform .16s}
+.kabianga-explore .explore-product:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));transform:translateY(-2px)}
+@media(max-width:640px){.kabianga-explore-section .section-title{font-size:15px}.kabianga-explore .explore-person{padding:10px}.kabianga-explore .explore-products{grid-template-columns:1fr}}
