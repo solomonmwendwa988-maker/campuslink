@@ -169,3 +169,13 @@
 .inbox-load-error button{margin-top:6px;padding:10px 16px;border-radius:10px;background:var(--accent);color:#fff;font-weight:600}
 @keyframes inbox-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.inbox-loading-spinner{animation:none}}
+
+/* Mobile inbox reliability: bounded scroll region, visible cached refresh state. */
+.instagram-messages .conversation-list{min-height:0;overflow:hidden}
+.instagram-messages .conversation-items{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.instagram-messages .inbox-loading,.instagram-messages .inbox-load-error{min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:22px 16px;text-align:center;color:var(--muted)}
+.instagram-messages .inbox-load-error button{padding:10px 16px;border-radius:10px;background:#2563eb;color:#fff;font-weight:600}
+.instagram-messages .inbox-stale-notice{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;margin:6px 0;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--muted);font-size:11px;line-height:1.4}
+.instagram-messages .inbox-stale-notice button{flex:none;padding:7px 10px;border-radius:8px;background:#2563eb;color:#fff;font-weight:600}
+@media(max-width:720px){.messaging-route .layout{min-height:0}.messaging-route .content{width:100%;min-width:0;padding:0}.instagram-messages{width:100%;height:calc(100dvh - 64px - 62px - env(safe-area-inset-bottom));min-height:0;max-height:none;overflow:hidden;display:flex;flex-direction:column}.instagram-messages .conversation-list{width:100%;flex:1;padding:clamp(12px,4vw,20px);min-height:0}.instagram-messages .conversation-items{padding-bottom:env(safe-area-inset-bottom)}.instagram-messages .ig-conversation{width:100%;max-width:100%}.instagram-messages .chat-active{flex:1;min-height:0}.instagram-messages.mobile-chat-open .chat-active{height:100%;min-height:0}.instagram-messages .ig-chat-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}.instagram-messages .ig-chat-send{flex-shrink:0;max-width:100%;padding-bottom:max(8px,env(safe-area-inset-bottom))}.instagram-messages .ig-chat-send input{font-size:16px!important}}
+@media(max-width:360px){.instagram-messages .conversation-list{padding:11px}.instagram-messages .ig-conversation{gap:8px;padding:9px 5px}.instagram-messages .conversation-meta{max-width:54px}}

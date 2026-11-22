@@ -13,6 +13,31 @@ function personName(person?: ApiConversation['participants'][number]) {
 function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase() ?? '').join('') || 'S';
 }
+const INBOX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+function inboxCacheKey(scope?: string) {
+  const normalized = (scope ?? '').trim().toLowerCase();
+  return normalized ? `campuslink:inbox:v2:${normalized}` : null;
+}
+function readInboxCache(scope?: string): ApiConversation[] {
+  const key = inboxCacheKey(scope);
+  if (!key || typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const cache = JSON.parse(raw) as { savedAt?: number; data?: ApiConversation[] };
+    if (!Array.isArray(cache.data) || !cache.savedAt || Date.now() - cache.savedAt > INBOX_CACHE_TTL) {
+      window.localStorage.removeItem(key);
+      return [];
+    }
+    return cache.data;
+  } catch { return []; }
+}
+function writeInboxCache(scope: string | undefined, data: ApiConversation[]) {
+  const key = inboxCacheKey(scope);
+  if (!key || typeof window === 'undefined') return;
+  try { window.localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data })); } catch { /* Storage may be full or disabled; inbox remains usable. */ }
+}
+
 function timeLabel(date?: string) {
   if (!date) return '';
   const value = new Date(date);
@@ -23,9 +48,9 @@ function timeLabel(date?: string) {
   return value.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function MessagesPage({ initialUsername, onInitialHandled }: { initialUsername?: string; onInitialHandled?: () => void }) {
+export function MessagesPage({ initialUsername, onInitialHandled, cacheScope }: { initialUsername?: string; onInitialHandled?: () => void; cacheScope?: string }) {
   const navigate = useNavigate();
-  const [conversations, setConversations] = useState<ApiConversation[]>([]);
+  const [conversations, setConversations] = useState<ApiConversation[]>(() => readInboxCache(cacheScope));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ApiMessage[]>([]);
   const [search, setSearch] = useState('');
@@ -33,7 +58,10 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
   const [newUsername, setNewUsername] = useState('');
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
-  const [loadingList, setLoadingList] = useState(true);
+  const [loadingList, setLoadingList] = useState(() => readInboxCache(cacheScope).length === 0);
+  const inboxRequestVersion = useRef(0);
+  const conversationsRef = useRef(conversations);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
   const [inboxError, setInboxError] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
@@ -67,25 +95,38 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
   }), [conversations, search]);
 
   const refreshConversations = useCallback(async (quiet = false) => {
-    if (!quiet) { setLoadingList(true); setInboxError(''); }
+    const requestVersion = ++inboxRequestVersion.current;
+    const hasCachedData = conversationsRef.current.length > 0;
+    if (!quiet && !hasCachedData) { setLoadingList(true); setInboxError(''); }
     let timeoutId: number | undefined;
-    let timedOut = false;
     const controller = new AbortController();
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(() => {
+        controller.abort();
+        reject(new Error('INBOX_REQUEST_TIMEOUT'));
+      }, 9000);
+    });
     try {
-      // A slow/hung API must never leave the mobile inbox in an invisible loading state.
-      timeoutId = window.setTimeout(() => { timedOut = true; controller.abort(); }, 12000);
-      const result = await listConversations(controller.signal);
-      setConversations(Array.isArray(result.data) ? result.data : []);
-      setSelectedId(current => current && result.data.some(item => item.id === current) ? current : null);
+      // Race the fetch against a hard timeout. Abort alone is not enough on some
+      // mobile browsers/proxies, which may leave a request pending indefinitely.
+      const result = await Promise.race([listConversations(controller.signal), timeout]);
+      if (requestVersion !== inboxRequestVersion.current) return;
+      const fresh = Array.isArray(result.data) ? result.data : [];
+      setConversations(fresh);
+      writeInboxCache(cacheScope, fresh);
+      setSelectedId(current => current && fresh.some(item => item.id === current) ? current : null);
       setError(''); setInboxError('');
     } catch (err) {
-      const message = timedOut ? 'The inbox is taking too long to load. Check your connection and retry.' : err instanceof Error ? err.message : 'Could not load conversations.';
-      if (!quiet) { setInboxError(message); setError(''); }
+      if (requestVersion !== inboxRequestVersion.current) return;
+      const message = err instanceof Error && err.message === 'INBOX_REQUEST_TIMEOUT'
+        ? 'CampusLink could not reach the inbox in time. Your saved conversations are kept; retry when your connection is ready.'
+        : err instanceof Error ? err.message : 'Could not refresh conversations.';
+      if (!quiet || hasCachedData) { setInboxError(message); setError(''); }
     } finally {
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
-      if (!quiet) setLoadingList(false);
+      if (requestVersion === inboxRequestVersion.current && !quiet) setLoadingList(false);
     }
-  }, []);
+  }, [cacheScope]);
 
   const refreshMessages = useCallback(async (conversationId: string, quiet = false, acknowledge = false) => {
     if (!quiet) setLoadingMessages(true);
@@ -215,6 +256,8 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
       <label className="message-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search conversations" aria-label="Search conversations"/><button type="button" onClick={() => setSearch('')} aria-label="Clear search"><X size={15}/></button></label>
       {newChatOpen && <form className="new-chat-form" onSubmit={createChat}><input value={newUsername} onChange={event => setNewUsername(event.target.value)} placeholder="Student username" autoFocus/><button type="submit" disabled={!newUsername.trim()}>Start</button></form>}
       {error && <div className="messages-error" role="alert">{error}</div>}
+      {inboxError && conversations.length > 0 && <div className="inbox-stale-notice" role="status"><span>{inboxError}</span><button type="button" onClick={() => void refreshConversations()}>Refresh</button></div>}
+
       <div className="conversation-items" aria-live="polite">
         {loadingList && conversations.length === 0 && <div className="inbox-loading" role="status"><span className="inbox-loading-spinner"/><strong>Loading conversations</strong><span>Connecting to your inbox…</span></div>}
         {!loadingList && inboxError && conversations.length === 0 && <div className="inbox-load-error" role="alert"><MessageCircle size={24}/><strong>Couldn't load your inbox</strong><span>{inboxError}</span><button type="button" onClick={() => void refreshConversations()}>Try again</button></div>}
