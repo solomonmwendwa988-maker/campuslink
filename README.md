@@ -1,34 +1,34 @@
-# CampusLink Messaging Reliability Patch
+# CampusLink Post Persistence Fix
 
-Apply these six source files to the existing CampusLink workspace, replacing the same paths. This is a patch ZIP, not a full project. Do not replace the entire repository.
+## Root cause
+The Home feed was using `useLocalState('posts', campusPostsSeed)` and `publish()` inserted a `Date.now()` local-only post. It never called the existing API `POST /api/v1/posts`. Refreshing therefore replaced the locally-created post with the initial local state. The frontend also did not load the persisted API feed on session restore.
 
-## Included improvements
-- Stable, constrained mobile inbox height and independent scrolling.
-- Account-scoped inbox cache and message cache using localStorage; cached content renders before network refresh. Cache entries expire after 7 days. Message cache keeps the latest 40 items per opened conversation.
-- Cached text and voice message data updates after successful sends.
-- Inbox API refresh interval: 8 seconds while visible.
-- Inbox typing previews via one batched endpoint for up to 50 conversations, polled every 2.5 seconds while visible.
-- Last-message preview displays outgoing Seen or Delivered state from existing readAt/deliveredAt fields.
-- Batched typing endpoint validates conversation IDs, requires membership, and filters blocked users/conversations.
-- Stale list/history requests are guarded from overwriting newer state.
-- Presence heartbeat: 15 seconds; presence polling: 5 seconds; stale-online threshold: 60 seconds.
+## Changes
+- Load feed records from the authenticated API when the user is signed in, and reload when feed tab changes.
+- Use API feed endpoint for For You/Latest/Popular and API Following endpoint for Following.
+- Map database UUID post IDs and API author/count/like/bookmark state into UI post records.
+- Publish text posts via existing `createSocialPost()` API and only display success after API success.
+- Persist edit/delete through existing API calls; update UI only after server success.
+- Remove numeric UUID sorting for Latest; the API already supplies descending creation order.
+- Stop local Following filters from overriding server-side follow scope.
+- Explicitly prevent image-containing posts from appearing to succeed because media upload is not wired to persistent storage in the current API.
 
-## Files changed
-1. apps/web/src/components/messaging/MessagesPage.tsx
-2. apps/web/src/app/App.tsx
-3. apps/web/src/services/api.ts
-4. apps/web/src/styles/messaging.css
-5. apps/api/src/messaging/messaging.service.ts
-6. apps/api/src/messaging/messaging.controller.ts
+## Apply
+Extract this ZIP into the CampusLink repository root and overwrite the two included files.
 
-No Prisma schema changes or migrations are required.
-
-## Validation
-TS/TSX parser syntax check passed for the modified files. A full web build could not be verified in this environment: dependency installation timed out and the workspace has an incomplete node_modules (TypeScript reports missing React and related type packages). Run both commands from the actual project root after applying:
+Then run:
 
 ```powershell
 npm run build -w apps/web
 npm run build -w apps/api
 ```
 
-Typing previews are near-real-time polling, not WebSocket push. Inbox read-receipt previews refresh through the conversation list API every 8 seconds. Cache stores message text/metadata locally, scoped to the username; it is not encrypted and should not be used on shared devices without care.
+If both pass, review the changes and commit:
+```powershell
+git add apps/web/src/app/App.tsx apps/web/src/types/post.ts
+git commit -m "Connect feed and post creation to persistent API"
+git push origin main
+```
+
+## Verification notes
+TypeScript transpilation syntax checks passed for the edited files. A full web build could not be completed in this workspace because the dependency installation timed out and left incomplete `node_modules` (missing several `@types` packages). The patch is not runtime-tested against the deployed API.

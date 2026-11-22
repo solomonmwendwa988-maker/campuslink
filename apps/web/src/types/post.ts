@@ -1,5 +1,5 @@
 export type Post = {
-  id: number;
+  id: string | number;
   name: string;
   handle: string;
   school: string;
