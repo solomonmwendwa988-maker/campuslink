@@ -136,13 +136,33 @@ export class PostsService {
     return comment;
   }
 
-  async comments(postId: string, cursor?: string) {
+  async comments(postId: string, viewerId?: string, cursor?: string) {
     const post = await this.prisma.post.findFirst({ where: { id: postId, deletedAt: null }, select: { id: true } });
     if (!post) throw new NotFoundException('Post not found.');
-    const rows = await this.prisma.comment.findMany({ where: { postId, parentId: null, deletedAt: null }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: pageSize + 1, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}), include: { author: { select: authorSelect }, replies: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' }, take: 30, include: { author: { select: authorSelect } } } } });
+    const rows = await this.prisma.comment.findMany({ where: { postId, parentId: null, deletedAt: null }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: pageSize + 1, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}), include: { author: { select: authorSelect }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } } } : {}), _count: { select: { likes: true } }, replies: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' }, take: 30, include: { author: { select: authorSelect }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } } } : {}), _count: { select: { likes: true } } } } } });
     const hasMore = rows.length > pageSize;
-    const data = rows.slice(0, pageSize);
+    const data = rows.slice(0, pageSize).map((row: any) => ({ ...row, liked: Boolean(row.likes?.length), likesCount: row._count?.likes ?? 0, likes: undefined, _count: undefined, replies: row.replies.map((reply: any) => ({ ...reply, liked: Boolean(reply.likes?.length), likesCount: reply._count?.likes ?? 0, likes: undefined, _count: undefined })) }));
     return { data, nextCursor: hasMore ? data.at(-1)?.id ?? null : null };
+  }
+
+  async getPost(postId: string, viewerId?: string) {
+    const row = await this.prisma.post.findFirst({ where: { id: postId, deletedAt: null, author: { deletedAt: null, deactivatedAt: null } }, include: { author: { select: authorSelect }, media: { orderBy: { position: 'asc' } }, _count: { select: { likes: true, comments: true, reposts: true, views: true } }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } }, bookmarks: { where: { userId: viewerId }, select: { userId: true } }, reposts: { where: { userId: viewerId }, select: { userId: true } } } : {}) } });
+    if (!row) throw new NotFoundException('Post not found.');
+    const { likes, bookmarks, reposts, ...post } = row as any;
+    return { ...post, liked: Boolean(likes?.length), bookmarked: Boolean(bookmarks?.length), reposted: Boolean(reposts?.length) };
+  }
+
+  async toggleCommentLike(userId: string, commentId: string, enabled: boolean) {
+    const comment = await this.prisma.comment.findFirst({ where: { id: commentId, deletedAt: null, post: { deletedAt: null } }, select: { id: true, authorId: true, postId: true } });
+    if (!comment) throw new NotFoundException('Comment not found.');
+    const post = await this.assertCanInteract(userId, comment.postId);
+    if (enabled) {
+      const created = await this.prisma.commentLike.createMany({ data: [{ userId, commentId }], skipDuplicates: true });
+      if (created.count && comment.authorId !== userId) await this.prisma.notification.create({ data: { recipientId: comment.authorId, actorId: userId, type: 'LIKE', entityId: commentId } });
+    } else await this.prisma.commentLike.deleteMany({ where: { userId, commentId } });
+    const likesCount = await this.prisma.commentLike.count({ where: { commentId } });
+    const liked = enabled ? Boolean(await this.prisma.commentLike.findUnique({ where: { userId_commentId: { userId, commentId } }, select: { userId: true } })) : false;
+    return { liked, likesCount };
   }
 
   private async assertCanInteract(userId: string, postId: string) {

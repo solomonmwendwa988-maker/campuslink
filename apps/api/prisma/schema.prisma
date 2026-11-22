@@ -74,6 +74,7 @@ model User {
   sessions           RefreshSession[]
   posts              Post[]
   comments           Comment[]
+  commentLikes        CommentLike[]
   likes              Like[]
   bookmarks          Bookmark[]
   reposts            Repost[]
@@ -200,6 +201,7 @@ model Comment {
   author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
   parent    Comment?  @relation("replies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   Comment[] @relation("replies")
+  likes    CommentLike[]
   createdAt DateTime  @default(now())
   @@index([postId, createdAt])
   @@index([parentId, createdAt])
@@ -222,6 +224,16 @@ model Bookmark {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   @@id([userId, postId])
+}
+
+model CommentLike {
+  userId    String   @db.Uuid
+  commentId String   @db.Uuid
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  @@id([userId, commentId])
+  @@index([commentId, createdAt])
 }
 
 model Repost {

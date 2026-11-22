@@ -22,6 +22,8 @@ export class PostsController {
 
   @Get('following') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
   following(@Req() req: RequestWithUser, @Query() query: PostPageDto) { return this.posts.feed(req.user!.id, query.cursor, true); }
+
+  @Get(':id') getPost(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string) { return this.posts.getPost(id, req.user?.id); }
   @Post() @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
   create(@Req() req: RequestWithUser, @Body() dto: CreatePostDto) { return this.posts.create(req.user!.id, dto); }
 
@@ -52,7 +54,11 @@ export class PostsController {
   @Delete(':id/repost') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
   unrepost(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string) { return this.posts.toggleRepost(req.user!.id, id, false); }
 
-  @Get(':id/comments') comments(@Param('id', ParseUUIDPipe) id: string, @Query() query: PostPageDto) { return this.posts.comments(id, query.cursor); }
+  @Get(':id/comments') comments(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string, @Query() query: PostPageDto) { return this.posts.comments(id, req.user?.id, query.cursor); }
+
+  @Post('comments/:commentId/like') commentLike(@Req() req: RequestWithUser, @Param('commentId', ParseUUIDPipe) commentId: string) { return this.posts.toggleCommentLike(req.user!.id, commentId, true); }
+
+  @Delete('comments/:commentId/like') commentUnlike(@Req() req: RequestWithUser, @Param('commentId', ParseUUIDPipe) commentId: string) { return this.posts.toggleCommentLike(req.user!.id, commentId, false); }
 
   @Post(':id/comments') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
   comment(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateCommentDto) { return this.posts.comment(req.user!.id, id, dto); }

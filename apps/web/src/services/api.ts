@@ -375,6 +375,9 @@ export interface ApiNotification {
   id: string;
   type: 'LIKE' | 'COMMENT' | 'REPLY' | 'REPOST' | 'FOLLOW' | 'MESSAGE' | 'EVENT';
   entityId?: string | null;
+  postId?: string | null;
+  commentId?: string | null;
+  parentCommentId?: string | null;
   readAt?: string | null;
   createdAt: string;
   actor?: { id: string; username: string; profile?: { fullName?: string | null; photoUrl?: string | null } | null } | null;
@@ -501,6 +504,10 @@ export async function repostSocialPost(postId: string) { return request<{ repost
 export async function unrepostSocialPost(postId: string) { return request<{ reposted: boolean }>(`/posts/${encodeURIComponent(postId)}/repost`, { method: 'DELETE', authenticated: true }); }
 export async function createSocialComment(postId: string, content: string, parentId?: string) { return request(`/posts/${encodeURIComponent(postId)}/comments`, { method: 'POST', authenticated: true, body: JSON.stringify({ content, ...(parentId ? { parentId } : {}) }) }); }
 export async function getSocialComments(postId: string, cursor?: string) { const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''; return request<{ data: unknown[]; nextCursor: string | null }>(`/posts/${encodeURIComponent(postId)}/comments${suffix}`, { authenticated: true }); }
+export async function getSocialPost(postId: string) { return request<SocialPostApiRecord>(`/posts/${encodeURIComponent(postId)}`, { authenticated: true }); }
+export async function likeSocialComment(commentId: string) { return request<{ liked: boolean; likesCount: number }>(`/posts/comments/${encodeURIComponent(commentId)}/like`, { method: 'POST', authenticated: true }); }
+export async function unlikeSocialComment(commentId: string) { return request<{ liked: boolean; likesCount: number }>(`/posts/comments/${encodeURIComponent(commentId)}/like`, { method: 'DELETE', authenticated: true }); }
+export async function getProfileConnections(username: string, direction: 'followers'|'following') { return request<{ data: Array<{ id: string; username: string; profile?: { fullName?: string | null; photoUrl?: string | null } | null }> }>(`/profiles/${encodeURIComponent(username)}/${direction}`, { authenticated: true }); }
 export async function getActivitySummary() { return request<{ unreadNotifications: number; engagement: { posts: number; likesReceived: number; commentsReceived: number; repostsReceived: number; totalReceived: number } }>('/notifications/summary', { authenticated: true }); }
 
 /* =========================================================

@@ -15,10 +15,13 @@ export class NotificationsService {
     const accountMuteRows = await this.prisma.accountMute.findMany({ where: { userId }, select: { mutedUserId: true } });
     const mutedActorIds = new Set(accountMuteRows.map(row => row.mutedUserId));
     const data = pageRows.filter(row => !(row.type === 'MESSAGE' && row.entityId && mutedMessageIds.has(row.entityId)) && !(row.actorId && mutedActorIds.has(row.actorId)));
+    const commentEntityIds = [...new Set(data.filter(row => (row.type === 'COMMENT' || row.type === 'REPLY' || row.type === 'LIKE') && row.entityId).map(row => row.entityId as string))];
+    const commentTargets = commentEntityIds.length ? await this.prisma.comment.findMany({ where: { id: { in: commentEntityIds }, deletedAt: null }, select: { id: true, postId: true, parentId: true } }) : [];
+    const commentTargetById = new Map(commentTargets.map(comment => [comment.id, comment]));
     const actorIds = [...new Set(data.map((row) => row.actorId).filter((id): id is string => Boolean(id)))];
     const actors = await this.prisma.user.findMany({ where: { id: { in: actorIds }, deletedAt: null }, select: { id: true, username: true, profile: { select: { fullName: true, photoUrl: true } } } });
     const actorById = new Map(actors.map((actor) => [actor.id, actor]));
-    return { data: data.map(({ actorId, ...notification }) => ({ ...notification, actor: actorId ? actorById.get(actorId) ?? null : null })), nextCursor: hasMore ? pageRows.at(-1)?.id ?? null : null };
+    return { data: data.map(({ actorId, ...notification }) => { const target = notification.entityId ? commentTargetById.get(notification.entityId) : undefined; return { ...notification, postId: target?.postId ?? null, commentId: target?.id ?? null, parentCommentId: target?.parentId ?? null, actor: actorId ? actorById.get(actorId) ?? null : null }; }), nextCursor: hasMore ? pageRows.at(-1)?.id ?? null : null };
   }
 
   async summary(userId: string) {
