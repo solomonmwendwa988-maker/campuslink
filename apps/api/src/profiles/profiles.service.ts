@@ -100,11 +100,17 @@ export class ProfilesService {
   }
 
   async update(userId: string, dto: UpdateProfileDto) {
-    const { username, campus, ...profileFields } = dto;
+    const { username, email, campus, ...profileFields } = dto;
     const profileData: Prisma.ProfileUpdateInput = profileFields;
     try {
       const result = await this.prisma.$transaction(async (tx) => {
         if (username) await tx.user.update({ where: { id: userId }, data: { username: username.toLowerCase() } });
+        if (email?.trim()) {
+          const normalizedEmail = email.trim().toLowerCase();
+          const currentUser = await tx.user.findUnique({ where: { id: userId }, select: { email: true } });
+          if (!currentUser) throw new NotFoundException('Account not found.');
+          if (normalizedEmail !== currentUser.email) await tx.user.update({ where: { id: userId }, data: { email: normalizedEmail, emailVerifiedAt: null } });
+        }
         if (campus?.trim()) {
           const currentProfile = await tx.profile.findUnique({ where: { userId }, select: { universityId: true } });
           if (!currentProfile) throw new NotFoundException('Profile not found.');
@@ -112,12 +118,12 @@ export class ProfilesService {
           if (!targetCampus) throw new NotFoundException('Campus is not available at your university.');
           profileData.campus = { connect: { id: targetCampus.id } };
         }
-        const user = await tx.user.update({ where: { id: userId }, data: { profile: { update: profileData } }, select: { id: true, username: true, profile: { select: { fullName: true, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true, verifiedAt: true } } } });
+        const user = await tx.user.update({ where: { id: userId }, data: { profile: { update: profileData } }, select: { id: true, username: true, email: true, profile: { select: { fullName: true, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true, verifiedAt: true } } } });
         return { user };
       });
       return result;
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('That username is already in use.');
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('That username or email address is already in use.');
       throw error;
     }
   }

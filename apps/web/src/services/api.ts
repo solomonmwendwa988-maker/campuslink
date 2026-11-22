@@ -193,10 +193,15 @@ export async function getOwnProfile(): Promise<{ user: PublicStudentProfile }> {
   return request<{ user: PublicStudentProfile }>('/profiles/me', { authenticated: true });
 }
 
-export type UpdateOwnProfilePayload = { username?: string; fullName?: string; bio?: string | null; course?: string; campus?: string; yearOfStudy?: number; interests?: string[]; skills?: string[]; isPrivate?: boolean; photoUrl?: string | null; coverUrl?: string | null };
+export type UpdateOwnProfilePayload = { email?: string; username?: string; fullName?: string; bio?: string | null; course?: string; campus?: string; yearOfStudy?: number; interests?: string[]; skills?: string[]; isPrivate?: boolean; photoUrl?: string | null; coverUrl?: string | null };
 
 export async function updateOwnProfile(payload: UpdateOwnProfilePayload) {
   return request('/profiles/me', { method: 'PATCH', authenticated: true, body: JSON.stringify(payload) });
+}
+
+export type AdminIdentity = { admin: { id: string; username: string; role: 'MODERATOR' | 'ADMIN' | 'SUPER_ADMIN' }; permissions: string[] };
+export async function getAdminIdentity() {
+  return request<AdminIdentity>('/admin/auth/me', { authenticated: true });
 }
 
 export async function logout(): Promise<void> {

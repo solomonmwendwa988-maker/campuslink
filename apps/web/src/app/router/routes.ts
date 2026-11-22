@@ -9,6 +9,7 @@ const routes: Record<string, string> = {
   Saved: '/saved',
   Profile: '/profile',
   Settings: '/settings',
+  Admin: '/admin',
   Login: '/login',
   Register: '/register',
   'Forgot password': '/forgot-password',
