@@ -101,3 +101,65 @@
 .typing-dots i:nth-child(2){animation-delay:150ms}.typing-dots i:nth-child(3){animation-delay:300ms}
 @keyframes campuslink-typing{0%,60%,100%{opacity:.35;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
 @media(max-width:720px){.instagram-messages .conversation-avatar,.instagram-messages .conversation-avatar .avatar{width:56px;height:56px;min-width:56px;max-width:56px;flex-basis:56px}.instagram-messages .conversation-avatar>i{right:0;bottom:1px}}
+
+/* Phase 1 mobile inbox hardening: deterministic viewport sizing and independent scrolling. */
+@media (max-width: 720px) {
+  html, body, #root { min-height: 100%; }
+  body { overflow-x: hidden; }
+  .messaging-route { min-height: 100dvh; overflow-x: clip; }
+  .messaging-route .layout {
+    display: block !important;
+    width: 100%; max-width: none; margin: 0; padding: 0 !important;
+    min-height: 0; height: auto;
+  }
+  .messaging-route .content {
+    width: 100%; max-width: none; min-width: 0; margin: 0; padding: 0;
+  }
+  .messaging-route .messages-page.instagram-messages {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    width: 100%; max-width: 100%; min-width: 0;
+    height: calc(100dvh - 64px - env(safe-area-inset-top) - 62px - env(safe-area-inset-bottom));
+    min-height: 0 !important; max-height: none;
+    margin: 0; padding: 0; border: 0; border-radius: 0;
+    overflow: hidden; box-shadow: none;
+    background: var(--panel);
+  }
+  .messaging-route .messages-page .conversation-list {
+    display: flex !important; flex-direction: column;
+    width: 100%; height: 100%; min-width: 0; min-height: 0; max-height: 100%;
+    overflow: hidden; padding: 14px 14px max(8px, env(safe-area-inset-bottom));
+  }
+  .messaging-route .messages-page .conversation-list-header,
+  .messaging-route .messages-page .message-search,
+  .messaging-route .messages-page .new-chat-form,
+  .messaging-route .messages-page .messages-error { flex: 0 0 auto; }
+  .messaging-route .messages-page .conversation-items {
+    display: flex; flex: 1 1 0%; flex-direction: column;
+    width: 100%; min-width: 0; min-height: 0; max-height: none;
+    overflow-x: hidden; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    padding: 4px 0 12px; gap: 2px;
+  }
+  .messaging-route .messages-page .conversation-items > button.conversation {
+    display: flex; flex: 0 0 auto; width: 100%; min-width: 0;
+  }
+  .messaging-route .messages-page .inbox-empty,
+  .messaging-route .messages-page .conversation-empty,
+  .messaging-route .messages-page .inbox-skeleton { flex: 0 0 auto; }
+  .messaging-route .messages-page.mobile-chat-open {
+    height: calc(100dvh - 64px - env(safe-area-inset-top));
+  }
+  .messaging-route .messages-page.mobile-chat-open .chat-active {
+    display: flex !important; flex-direction: column;
+    width: 100%; height: 100%; min-width: 0; min-height: 0; max-height: 100%; overflow: hidden;
+  }
+  .messaging-route .messages-page.mobile-chat-open .chat-scroll {
+    flex: 1 1 0%; min-height: 0; max-height: none;
+    overflow-x: hidden; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  }
+  .messaging-route .messages-page.mobile-chat-open .chat-send { flex: 0 0 auto; }
+  .messaging-route:has(.mobile-chat-open) .mobile-bottom-nav { display: none !important; }
+}
