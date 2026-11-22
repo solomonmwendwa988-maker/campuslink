@@ -12,8 +12,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({ jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), ignoreExpiration: false, secretOrKey: secret });
   }
   async validate(payload: { sub: string; username: string; sid: string }) {
-    const session = await this.prisma.refreshSession.findFirst({ where: { id: payload.sid, userId: payload.sub, revokedAt: null, expiresAt: { gt: new Date() }, user: { deletedAt: null, deactivatedAt: null } }, select: { user: { select: { id: true, username: true } } } });
+    const session = await this.prisma.refreshSession.findFirst({ where: { id: payload.sid, userId: payload.sub, revokedAt: null, expiresAt: { gt: new Date() }, user: { deletedAt: null, deactivatedAt: null } }, select: { user: { select: { id: true, username: true, role: true } } } });
     if (!session) throw new UnauthorizedException('Session is no longer active.');
-    return { id: session.user.id, username: session.user.username };
+    return { id: session.user.id, username: session.user.username, role: session.user.role };
   }
 }

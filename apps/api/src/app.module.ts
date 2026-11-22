@@ -13,6 +13,7 @@ import { EventsModule } from './events/events.module.js';
 import { MessagingModule } from './messaging/messaging.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { SafetyModule } from './safety/safety.module.js';
+import { AdminAuthModule } from './admin/admin-auth.module.js';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { SafetyModule } from './safety/safety.module.js';
     MessagingModule,
     NotificationsModule,
     SafetyModule,
+    AdminAuthModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

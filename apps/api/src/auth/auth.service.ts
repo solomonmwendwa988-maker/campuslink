@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ChangePasswordDto, ConfirmPasswordDto, LoginDto, RegisterDto } from './dto.js';
 import { createOpaqueToken, hashOpaqueToken, hashPassword, verifyPassword } from './credentials.js';
 
-const safeUser = { id: true, email: true, username: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true } } } satisfies Prisma.UserSelect;
+const safeUser = { id: true, email: true, username: true, role: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true } } } satisfies Prisma.UserSelect;
 
 @Injectable()
 export class AuthService {
