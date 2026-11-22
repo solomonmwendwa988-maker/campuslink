@@ -5,7 +5,7 @@ import { Avatar } from '../components/shared/Avatar';
 import { Post } from '../types/post';
 
 type Listing = { id: number; title: string; price: string; campus: string; category: string; image: string; seller: string; description?: string };
-export type StudentProfile = { name: string; username: string; email?: string; bio: string; university: string; campus: string; course: string; year: string; interests: string[]; skills?: string[]; avatar: string; avatarImage?: string; avatarCrop?: number; coverImage?: string; visibility: 'Public' | 'Private' };
+export type StudentProfile = { name: string; username: string; email?: string; bio: string; university: string; campus: string; course: string; year: string; interests: string[]; skills?: string[]; avatar: string; avatarImage?: string; avatarCrop?: number; coverImage?: string; visibility: 'Public' | 'Private'; verifiedAt?: string | null };
 export type AppNotification = { id: string | number; name: string; initials: string; avatarImage?: string; actorUsername?: string; text: string; time: string; unread: boolean; type: string };
 
 function Heading({ title, subtitle }: { title: string; subtitle: string }) { return <div className="page-heading"><div><p className="eyebrow">CAMPUSLINK</p><h1>{title}</h1><p className="muted">{subtitle}</p></div></div>; }

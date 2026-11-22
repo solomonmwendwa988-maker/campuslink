@@ -12,6 +12,10 @@ type RequestWithUser = Request & { user?: { id: string } };
 export class MessagingController {
   constructor(@Inject(MessagingService) private readonly messages: MessagingService) {}
   @Get() list(@Req() req: RequestWithUser) { return this.messages.list(req.user!.id); }
+  @Post('presence/heartbeat') heartbeat(@Req() req: RequestWithUser) { return this.messages.heartbeatPresence(req.user!.id); }
+  @Get('presence') presence(@Req() req: RequestWithUser, @Query('userIds') userIds = '') { const ids = userIds.split(',').filter(Boolean); if (ids.length > 50) throw new BadRequestException('Too many presence IDs.'); if (ids.some(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) throw new BadRequestException('Invalid presence user ID.'); return this.messages.getPresence(req.user!.id, ids); }
+  @Post(':id/typing') typing(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: { typing?: unknown }) { if (typeof body?.typing !== 'boolean') throw new BadRequestException('Typing state must be a boolean.'); return this.messages.setTyping(req.user!.id, id, body.typing); }
+  @Get(':id/typing') typingStatus(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string) { return this.messages.getTyping(req.user!.id, id); }
   @Post() start(@Req() req: RequestWithUser, @Body() dto: StartConversationDto) { return this.messages.start(req.user!.id, dto.username); }
   @Post(':id/messages') send(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SendMessageDto) { return this.messages.send(req.user!.id, id, dto.content, dto.clientMessageId); }
   @Get(':id/messages') history(@Req() req: RequestWithUser, @Param('id', ParseUUIDPipe) id: string, @Query() query: MessagePageDto) { return this.messages.history(req.user!.id, id, query.cursor); }

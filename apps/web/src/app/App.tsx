@@ -31,7 +31,7 @@ import { launchUniversity } from '../data/universities';
 import { clearCampusLinkData } from '../services/localStore';
 import { publishProfileUpdate, subscribeProfileUpdates } from '../services/profileEvents';
 import type { ApiUser } from '../services/api';
-import { clearAccessToken, getMe, logout as apiLogout, refreshAccessToken, listNotifications, markNotificationRead, markAllNotificationsRead, updateOwnProfile, ApiNotification } from '../services/api';
+import { clearAccessToken, getMe, logout as apiLogout, refreshAccessToken, listNotifications, markNotificationRead, markAllNotificationsRead, updateOwnProfile, heartbeatPresence, ApiNotification } from '../services/api';
 
 type Listing = { id: number; title: string; price: string; campus: string; category: string; image: string; seller: string; description?: string };
 type Profile = StudentProfile;
@@ -114,6 +114,14 @@ export function App() {
   const { dark, mode: themeMode, setMode: setThemeMode, setDark } = useTheme();
   const location = useLocation(); const navigate = useNavigate(); const profileRouteUsername = usernameFromPath(location.pathname); const routedPage = pageFromPath(location.pathname); const page = location.pathname === '/' && isAuthenticated ? 'Home' : routedPage; const setPage = (nextPage: string) => navigate(pathForPage(nextPage)); const [menu, setMenu] = useState(false); const [posts, setPosts] = useLocalState<Post[]>('posts', campusPostsSeed); const [marketItems, setMarketItems] = useLocalState<Listing[]>('listings', campusListingsSeed); const [favorites, setFavorites] = useLocalState<number[]>('favorites', []); const [followed, setFollowed] = useLocalState<string[]>('following', []); const [interestedEvents, setInterestedEvents] = useLocalState<string[]>('events', []); const [savedEvents, setSavedEvents] = useLocalState<string[]>('saved-events', []); const [notifications, setNotifications] = useLocalState<AppNotification[]>('notifications', notificationSeed); const [notificationsLoading, setNotificationsLoading] = useState(false); const [profile, setProfile] = useLocalState<Profile>('profile', profileSeed); const [preferences, setPreferences] = useLocalState<Record<string, boolean>>('preferences', {});
   const [composer, setComposer] = useState(''); const [postImage, setPostImage] = useState<string | undefined>(); const [search, setSearch] = useState(''); const [category, setCategory] = useState('All items'); const [feedTab, setFeedTab] = useState('For You');  const [messageTargetUsername, setMessageTargetUsername] = useState<string | null>(null); const [toast, setToast] = useState(''); const [hiddenPosts,setHiddenPosts]=useLocalState<number[]>('hidden-posts',[]); const notificationSeenRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const beat = () => { if (document.visibilityState === 'visible') void heartbeatPresence().catch(() => undefined); };
+    beat(); const timer = window.setInterval(beat, 25000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') beat(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [isAuthenticated]);
   useEffect(() => {
     // This app's previous feed/listing/notification/chat data was local demo data.
     // Clear it so it cannot masquerade as live server content.
@@ -335,6 +343,7 @@ function Events({ interested, toggle, saved, toggleSaved }: { interested: string
 function MessagesLegacy() { const names=['Joy M.','Dylan O.','Campus Creatives']; const initialChats:Record<string,{text:string;mine:boolean}[]>={'Joy M.':[{text:'Hey! Are you coming to the student commons this afternoon?',mine:false},{text:'Yes, I should be there around 3. Save me a seat?',mine:true},{text:'Of course! See you there 🙂',mine:false}],'Dylan O.':[{text:'That sounds great. Let me check my schedule.',mine:false}],'Campus Creatives':[{text:'Njeri shared a photo from the meetup.',mine:false}]}; const [chats,setChats]=useLocalState<Record<string,{text:string;mine:boolean}[]>>('messages',initialChats); const [selected,setSelected]=useState(names[0]); const [query,setQuery]=useState(''); const [draft,setDraft]=useState(''); const lastMessage=(name:string)=>{const messages=chats[name]??[];return messages[messages.length-1]?.text??'Start a conversation';}; const send=(e:React.FormEvent)=>{e.preventDefault();if(!draft.trim())return;setChats(current=>({...current,[selected]:[...(current[selected]??[]),{text:draft.trim(),mine:true}]}));setDraft('');}; return <><HomeHeader page="Messages"/><div className="card messages"><div className="conversation-list"><div className="message-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search conversations"/></div>{names.filter(name=>`${name} ${lastMessage(name)}`.toLowerCase().includes(query.toLowerCase())).map((name,i)=><button className={`conversation ${selected===name?'selected':''}`} key={name} onClick={()=>setSelected(name)}><Avatar initials={name.split(' ').map(y=>y[0]).join('')}/><div><strong>{name}</strong><small>{lastMessage(name)}</small></div><span>{['2m','1h','3h'][i]}</span></button>)}</div><section className="chat-active"><header className="chat-head"><Avatar initials={selected.split(' ').map(y=>y[0]).join('')}/><div><strong>{selected}</strong><small>CampusLink member · local demo</small></div></header><div className="chat-scroll">{(chats[selected]??[]).map((message,i)=><div className={`chat-bubble ${message.mine?'mine':''}`} key={`${selected}-${i}`}>{message.text}<span className="chat-time">{message.mine?'Sent':'Today'}</span></div>)}</div><form className="chat-send" onSubmit={send}><input value={draft} onChange={e=>setDraft(e.target.value)} placeholder={`Message ${selected}…`}/><button type="submit" aria-label="Send message" disabled={!draft.trim()}><Send size={16}/></button></form></section></div></>; }
 
 function Toast({ message }: { message: string }) { return <AnimatePresence>{message&&<motion.div className="app-toast" role="status" initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0,y:8}}>{message}</motion.div>}</AnimatePresence>; }
+
 
 
 

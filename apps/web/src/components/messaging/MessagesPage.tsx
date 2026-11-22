@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, Plus, Search, Send, MessageCircle, X, Mic, Square, MoreHorizontal, UserRound, VolumeX, ShieldBan, Flag } from 'lucide-react';
 import { Avatar } from '../shared/Avatar';
-import { ApiConversation, ApiMessage, listConversations, getConversationMessages, sendConversationMessage, markConversationRead, startConversation, sendVoiceMessage, blockUser, reportUser, muteConversation, unmuteConversation } from '../../services/api';
+import { ApiConversation, ApiMessage, listConversations, getConversationMessages, sendConversationMessage, markConversationRead, startConversation, sendVoiceMessage, blockUser, reportUser, muteConversation, unmuteConversation, getPresence, setConversationTyping, getConversationTyping } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { pathForProfile } from '../../app/router/routes';
 
@@ -42,10 +42,13 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
   const [voicePreviewUrl, setVoicePreviewUrl] = useState<string | null>(null);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [voiceSending, setVoiceSending] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const voiceChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<number | null>(null);
+  const typingTimerRef = useRef<number | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const openedInitialUsername = useRef<string>('');
@@ -109,6 +112,13 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
     return () => { cancelled = true; };
   }, [initialUsername, refreshConversations, onInitialHandled]);
   useEffect(() => { const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void refreshConversations(true); }, 30000); return () => window.clearInterval(timer); }, [refreshConversations]);
+  useEffect(() => {
+    const ids = conversations.flatMap(item => item.participants.map(participant => participant.id));
+    if (!ids.length) { setOnlineUsers(new Set()); return; }
+    let cancelled = false;
+    const poll = () => { if (document.visibilityState !== 'visible') return; void getPresence(ids).then(result => { if (!cancelled) setOnlineUsers(new Set(result.data.filter(status => status.online).map(status => status.userId))); }).catch(() => undefined); };
+    poll(); const timer = window.setInterval(poll, 15000); return () => { cancelled = true; window.clearInterval(timer); };
+  }, [conversations]);
   // Acknowledge read status only when the conversation selection changes (explicit open).
   useEffect(() => {
     if (!selectedId) { setMessages([]); return; }
@@ -123,6 +133,29 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
     }, 12000);
     return () => window.clearInterval(timer);
   }, [selectedId, refreshMessages, mobileChatOpen]);
+  useEffect(() => {
+    if (!selectedId || !contact?.id) { setTypingUsers(new Set()); return; }
+    let cancelled = false;
+    const poll = () => { if (document.visibilityState !== 'visible') return; void getConversationTyping(selectedId).then(result => { if (!cancelled) setTypingUsers(new Set(result.userIds)); }).catch(() => undefined); };
+    poll(); const timer = window.setInterval(poll, 1500); return () => { cancelled = true; window.clearInterval(timer); setTypingUsers(new Set()); };
+  }, [selectedId, contact?.id]);
+  const handleDraftChange = (value: string) => {
+    setDraft(value);
+    if (!selectedId) return;
+    if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
+    if (value.trim()) {
+      void setConversationTyping(selectedId, true).catch(() => undefined);
+      typingTimerRef.current = window.setTimeout(() => { void setConversationTyping(selectedId, false).catch(() => undefined); typingTimerRef.current = null; }, 4000);
+    } else {
+      void setConversationTyping(selectedId, false).catch(() => undefined);
+      typingTimerRef.current = null;
+    }
+  };
+  useEffect(() => () => {
+    if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
+    if (selectedId) void setConversationTyping(selectedId, false).catch(() => undefined);
+  }, [selectedId]);
+
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [messages.length, selectedId]);
 
   const openConversation = (id: string) => {
@@ -138,7 +171,7 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
     try {
       const result = await sendConversationMessage(selectedId, content, clientMessageId);
       setMessages(current => current.some(message => message.id === result.message.id) ? current : [...current, result.message]);
-      setDraft(''); void refreshConversations(true);
+      handleDraftChange(''); void refreshConversations(true);
     } catch (err) { setError(err instanceof Error ? err.message : 'Message failed to send. Please retry.'); }
     finally { setSending(false); }
   };
@@ -170,21 +203,22 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
         {loadingList && conversations.length === 0 && <div className="inbox-skeleton" aria-label="Loading conversations">{Array.from({length:4},(_,i)=><div className="inbox-skeleton-row" key={i}><span className="skeleton skeleton-avatar"/><span className="skeleton skeleton-line"/><span className="skeleton skeleton-time"/></div>)}</div>}
         {!loadingList && conversations.length === 0 && <div className="inbox-empty"><MessageCircle size={25}/><strong>Your messages are waiting</strong><span>Start a conversation with a student from Explore.</span><button onClick={() => setNewChatOpen(true)}>New message</button></div>}
         {filtered.map(item => { const student = item.participants[0]; const title = personName(student); const last = item.lastMessage; const isMine = Boolean(last && item.participants.every(p => p.id !== last.senderId)); return <button className={`conversation ig-conversation${selectedId === item.id ? ' selected' : ''}`} key={item.id} onClick={() => openConversation(item.id)}>
-          <Avatar initials={initials(title)} image={student?.profile?.photoUrl ?? undefined}/><span className="conversation-details"><strong>{title}</strong><small>{last ? `${isMine ? 'You: ' : ''}${last.content}` : 'Start a conversation'}</small></span><span className="conversation-meta"><small>{timeLabel(last?.createdAt ?? item.updatedAt)}</small>{item.unreadCount > 0 && <b>{item.unreadCount}</b>}</span>
+          <span className={`conversation-avatar${student && onlineUsers.has(student.id) ? ' is-online' : ''}`}><Avatar initials={initials(title)} image={student?.profile?.photoUrl ?? undefined}/>{student && onlineUsers.has(student.id) && <i aria-label="Online" title="Online"/>}</span><span className="conversation-details"><strong>{title}</strong><small>{last ? `${isMine ? 'You: ' : ''}${last.content}` : 'Start a conversation'}</small></span><span className="conversation-meta"><small>{timeLabel(last?.createdAt ?? item.updatedAt)}</small>{item.unreadCount > 0 && <b>{item.unreadCount}</b>}</span>
         </button>})}
         {!loadingList && filtered.length === 0 && conversations.length > 0 && <div className="conversation-empty">No conversations found.</div>}
       </div>
     </aside>
     <section className="chat-active" aria-label={contact ? `Conversation with ${personName(contact)}` : 'Conversation'}>
       {!selected ? <div className="instagram-chat-welcome"><div className="welcome-icon"><Send size={28}/></div><h2>Your messages</h2><p>Connect with classmates and keep conversations going.</p><button onClick={() => setNewChatOpen(true)}>Send a message</button></div> : <>
-        <header className="chat-head ig-chat-head"><button className="chat-back" onClick={back} aria-label="Back to inbox"><ChevronRight size={19}/></button><button className="chat-contact-profile" type="button" onClick={openContactProfile} title="View profile"><Avatar initials={initials(personName(contact))} image={contact?.profile?.photoUrl ?? undefined}/><div className="chat-contact"><strong>{personName(contact)}</strong><small>@{contact?.username}</small></div></button><button className="chat-contact-menu-trigger" onClick={()=>setContactMenuOpen(open=>!open)} aria-label="Conversation options"><MoreHorizontal size={19}/></button></header>{contactMenuOpen&&<div className="conversation-contact-menu"><button onClick={openContactProfile}><UserRound size={16}/> View profile</button><button onClick={toggleMute}><VolumeX size={16}/> {muted?'Unmute conversation':'Mute conversation'}</button><button onClick={handleReport}><Flag size={16}/> Report user</button><button className="danger" onClick={handleBlock}><ShieldBan size={16}/> Block user</button></div>}
+        <header className="chat-head ig-chat-head"><button className="chat-back" onClick={back} aria-label="Back to inbox"><ChevronRight size={19}/></button><button className="chat-contact-profile" type="button" onClick={openContactProfile} title="View profile"><Avatar initials={initials(personName(contact))} image={contact?.profile?.photoUrl ?? undefined}/><div className="chat-contact"><strong>{personName(contact)}</strong><small><i className={contact && onlineUsers.has(contact.id) ? 'online' : ''}/>{contact && onlineUsers.has(contact.id) ? 'Online' : `@${contact?.username}`}</small></div></button><button className="chat-contact-menu-trigger" onClick={()=>setContactMenuOpen(open=>!open)} aria-label="Conversation options"><MoreHorizontal size={19}/></button></header>{contactMenuOpen&&<div className="conversation-contact-menu"><button onClick={openContactProfile}><UserRound size={16}/> View profile</button><button onClick={toggleMute}><VolumeX size={16}/> {muted?'Unmute conversation':'Mute conversation'}</button><button onClick={handleReport}><Flag size={16}/> Report user</button><button className="danger" onClick={handleBlock}><ShieldBan size={16}/> Block user</button></div>}
         <div className="chat-scroll ig-chat-scroll" ref={scrollRef} aria-live="polite">
           <div className="chat-profile-intro"><Avatar initials={initials(personName(contact))} image={contact?.profile?.photoUrl ?? undefined}/><strong>{personName(contact)}</strong><span>@{contact?.username}</span><p>CampusLink · University community</p></div>
           {loadingMessages && messages.length === 0 && <div className="chat-skeleton" aria-label="Loading messages">{Array.from({length:5},(_,i)=><span className={`skeleton skeleton-message ${i%2?'right':'left'}`} key={i}/> )}</div>}
           {messages.map(message => { const mine = selected.participants.length > 0 && !selected.participants.some(p => p.id === message.senderId); const audioAttachment = message.attachments?.find(attachment => attachment.mediaType.startsWith('audio/')); return <div className={`ig-message-row${mine ? ' mine' : ''}`} key={message.id}><div className="chat-bubble ig-bubble">{audioAttachment ? <div className="voice-message"><audio controls preload="metadata" src={audioAttachment.url}/><span>Voice message</span></div> : message.content}<span className="chat-time">{timeLabel(message.createdAt)}</span>{mine && <span className={`message-receipt${message.readAt ? ' seen' : message.deliveredAt ? ' delivered' : ''}`}>{message.readAt ? 'Seen' : message.deliveredAt ? 'Delivered' : 'Sent'}</span>}</div></div>; })}
           {!loadingMessages && messages.length === 0 && <div className="chat-empty-state"><b>Say hello to {personName(contact)}</b><span>You're connected. Start your conversation.</span></div>}
+          {contact && typingUsers.has(contact.id) && <div className="typing-indicator"><span className="typing-dots"><i/><i/><i/></span><span>{personName(contact)} is typing</span></div>}
         </div>
-        <form className="chat-send ig-chat-send" onSubmit={submitMessage}>{voiceBlob&&voicePreviewUrl?<div className="voice-preview"><audio controls src={voicePreviewUrl}/><span>{formatDuration(recordSeconds)}</span><button type="button" onClick={cancelVoiceRecording} aria-label="Discard recording"><X size={16}/></button><button type="button" onClick={sendVoice} disabled={voiceSending}>{voiceSending?'Uploading…':'Send voice'}</button></div>:recording?<div className="voice-recording-controls"><span className="recording-dot"/><b>{formatDuration(recordSeconds)}</b><span>Recording voice message</span><button type="button" onClick={cancelVoiceRecording} aria-label="Cancel recording"><X size={17}/></button><button type="button" onClick={stopVoiceRecording} aria-label="Stop recording"><Square size={16}/></button></div>:<><input value={draft} onChange={event => setDraft(event.target.value)} placeholder="Message…" aria-label="Write a message" autoComplete="off"/><button type="button" className="voice-record-button" onClick={beginVoiceRecording} aria-label="Record voice message"><Mic size={17}/></button><button type="submit" aria-label="Send message" disabled={!draft.trim() || sending}>{sending ? "Sending…" : <Send size={17}/>}</button></>}</form>
+        <form className="chat-send ig-chat-send" onSubmit={submitMessage}>{voiceBlob&&voicePreviewUrl?<div className="voice-preview"><audio controls src={voicePreviewUrl}/><span>{formatDuration(recordSeconds)}</span><button type="button" onClick={cancelVoiceRecording} aria-label="Discard recording"><X size={16}/></button><button type="button" onClick={sendVoice} disabled={voiceSending}>{voiceSending?'Uploading…':'Send voice'}</button></div>:recording?<div className="voice-recording-controls"><span className="recording-dot"/><b>{formatDuration(recordSeconds)}</b><span>Recording voice message</span><button type="button" onClick={cancelVoiceRecording} aria-label="Cancel recording"><X size={17}/></button><button type="button" onClick={stopVoiceRecording} aria-label="Stop recording"><Square size={16}/></button></div>:<><input value={draft} onChange={event => handleDraftChange(event.target.value)} placeholder="Message…" aria-label="Write a message" autoComplete="off"/><button type="button" className="voice-record-button" onClick={beginVoiceRecording} aria-label="Record voice message"><Mic size={17}/></button><button type="submit" aria-label="Send message" disabled={!draft.trim() || sending}>{sending ? "Sending…" : <Send size={17}/>}</button></>}</form>
       </>}
     </section>
   </div>;

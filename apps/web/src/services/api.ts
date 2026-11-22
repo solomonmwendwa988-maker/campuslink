@@ -19,7 +19,7 @@ export interface ApiUser {
   interests?: string[];
   skills?: string[];
   emailVerified?: boolean;
-  profile?: { fullName?: string | null; bio?: string | null; course?: string | null; yearOfStudy?: number | string | null; photoUrl?: string | null; coverUrl?: string | null; interests?: string[]; skills?: string[]; isPrivate?: boolean; campus?: { name?: string | null } | string | null; university?: { name?: string | null } | string | null } | null;
+  profile?: { fullName?: string | null; bio?: string | null; course?: string | null; yearOfStudy?: number | string | null; photoUrl?: string | null; coverUrl?: string | null; interests?: string[]; skills?: string[]; isPrivate?: boolean; verifiedAt?: string | null; campus?: { name?: string | null } | string | null; university?: { name?: string | null } | string | null } | null;
   counts?: { follows?: number; followedBy?: number; posts?: number };
 }
 
@@ -385,16 +385,45 @@ export async function markAllNotificationsRead() {
 }
 
 /* =========================================================
+   MESSAGING PRESENCE & TYPING
+   ========================================================= */
+export type PresenceStatus = { userId: string; online: boolean; lastSeenAt: string | null };
+export async function heartbeatPresence() {
+  return request<{ online: true }>('/messages/conversations/presence/heartbeat', { method: 'POST', authenticated: true });
+}
+export async function getPresence(userIds: string[]) {
+  const uniqueIds = [...new Set(userIds)].slice(0, 50);
+  if (!uniqueIds.length) return { data: [] as PresenceStatus[] };
+  return request<{ data: PresenceStatus[] }>(`/messages/conversations/presence?userIds=${encodeURIComponent(uniqueIds.join(','))}`, { authenticated: true });
+}
+export async function setConversationTyping(conversationId: string, typing: boolean) {
+  return request<{ ok: true }>(`/messages/conversations/${encodeURIComponent(conversationId)}/typing`, { method: 'POST', authenticated: true, body: JSON.stringify({ typing }) });
+}
+export async function getConversationTyping(conversationId: string) {
+  return request<{ userIds: string[] }>(`/messages/conversations/${encodeURIComponent(conversationId)}/typing`, { authenticated: true });
+}
+
+/* =========================================================
    STUDENT PROFILES & CONNECTIONS
    ========================================================= */
 
 export interface PublicStudentProfile extends DiscoverStudent {
+  email?: string;
   isFollowing?: boolean;
   profile?: DiscoverStudent['profile'] & {
+    verifiedAt?: string | null;
     coverUrl?: string | null;
     campus?: { name?: string | null } | string | null;
     university?: { name?: string | null } | string | null;
   };
+}
+
+export type VerificationRequestPayload = { fullName: string; studentId: string; phone: string; course: string; campus: string; reason: string; attestationsAccepted: boolean };
+export async function submitVerificationRequest(payload: VerificationRequestPayload) {
+  return request<{ request: { id: string; status: string; submittedAt: string }; message: string }>('/profiles/verification-requests', { method: 'POST', authenticated: true, body: JSON.stringify(payload) });
+}
+export async function getMyVerificationRequest() {
+  return request<{ request: { id: string; status: string; submittedAt: string; reviewedAt?: string | null; reviewNote?: string | null } | null }>('/profiles/verification-requests/me', { authenticated: true });
 }
 
 export async function getPublicProfile(username: string): Promise<{ user: PublicStudentProfile }> {

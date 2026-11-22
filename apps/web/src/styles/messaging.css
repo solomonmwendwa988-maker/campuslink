@@ -81,3 +81,23 @@
 .instagram-messages .chat-active{position:relative}
 
 .inbox-skeleton{display:grid;gap:8px;padding-top:8px}.inbox-skeleton-row{display:flex;align-items:center;gap:12px;padding:11px 8px}.skeleton-avatar{width:54px;height:54px;border-radius:50%;flex:0 0 54px}.skeleton-line{height:12px;flex:1;max-width:150px}.skeleton-time{height:9px;width:38px}.chat-skeleton{display:flex;flex-direction:column;gap:12px;padding:16px}.skeleton-message{height:56px;width:44%;border-radius:18px}.skeleton-message.left{align-self:flex-start}.skeleton-message.right{align-self:flex-end;width:36%}
+
+/* Inbox layout stability: let the conversation list occupy available viewport space and scroll internally. */
+.instagram-messages .conversation-list{min-height:0}.instagram-messages .conversation-items{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column}.instagram-messages .conversation-items>.conversation{flex:0 0 auto}
+/* Voice controls use clear, consistent action hierarchy. */
+.voice-record-button{border:1px solid var(--line);transition:background .18s,color .18s,transform .18s}.voice-record-button:active{transform:scale(.96)}.voice-recording-controls,.voice-preview{border:1px solid var(--line);border-radius:14px;background:var(--panel2);padding:8px 10px;min-height:54px}.voice-recording-controls button,.voice-preview button{min-height:38px;min-width:38px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);font-weight:600}.voice-preview button:last-child{background:var(--accent);color:#fff;border-color:transparent;padding:0 14px}.voice-preview audio{height:42px;min-width:0}.voice-preview span{white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* CampusLink presence and typing feedback */
+.instagram-messages .conversation-avatar{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:58px;height:58px}
+.instagram-messages .conversation-avatar .avatar{width:58px;height:58px;min-width:58px;max-width:58px;flex:0 0 58px;border-radius:50%;overflow:hidden}
+.instagram-messages .conversation-avatar>i{position:absolute;right:1px;bottom:2px;width:12px;height:12px;border:2px solid var(--panel);border-radius:50%;background:#98a1b1}
+.instagram-messages .conversation-avatar.is-online>i{background:#22a06b;box-shadow:0 0 0 2px #22a06b24}
+.instagram-messages .chat-contact small{min-height:14px}
+.instagram-messages .chat-contact small i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#98a1b1;margin-right:5px}
+.instagram-messages .chat-contact small i.online{background:#22a06b;box-shadow:0 0 0 3px #22a06b20}
+.typing-indicator{display:flex;align-items:center;gap:9px;align-self:flex-start;margin:8px 0 2px;padding:9px 12px;border:1px solid var(--line);border-radius:14px;background:var(--panel2);color:var(--muted);font-size:11px}
+.typing-dots{display:flex;align-items:center;gap:3px}
+.typing-dots i{display:block;width:5px;height:5px;border-radius:50%;background:var(--muted);animation:campuslink-typing 1s infinite ease-in-out}
+.typing-dots i:nth-child(2){animation-delay:150ms}.typing-dots i:nth-child(3){animation-delay:300ms}
+@keyframes campuslink-typing{0%,60%,100%{opacity:.35;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+@media(max-width:720px){.instagram-messages .conversation-avatar,.instagram-messages .conversation-avatar .avatar{width:56px;height:56px;min-width:56px;max-width:56px;flex-basis:56px}.instagram-messages .conversation-avatar>i{right:0;bottom:1px}}

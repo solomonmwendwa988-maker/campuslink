@@ -23,3 +23,13 @@ export class DiscoverStudentsDto {
   @ApiPropertyOptional({ description: 'Search students by name, username, or course.' })
   @IsOptional() @IsString() @MaxLength(80) search?: string;
 }
+
+export class VerificationRequestDto {
+  @IsString() @MinLength(2) @MaxLength(100) fullName!: string;
+  @IsString() @MinLength(6) @MaxLength(40) studentId!: string;
+  @IsString() @Matches(/^\+?[0-9]{9,15}$/) phone!: string;
+  @IsString() @MaxLength(120) course!: string;
+  @IsString() @MaxLength(120) campus!: string;
+  @IsString() @MinLength(20) @MaxLength(800) reason!: string;
+  @IsBoolean() attestationsAccepted!: boolean;
+}

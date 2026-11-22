@@ -24,6 +24,43 @@ type VoiceUploadFile = { buffer: Buffer; mimetype: string; originalname?: string
 export class MessagingService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
+  async heartbeatPresence(userId: string) {
+    const now = new Date();
+    await this.prisma.messagingPresence.upsert({ where: { userId }, create: { userId, lastSeenAt: now }, update: { lastSeenAt: now } });
+    return { online: true as const };
+  }
+
+  async getPresence(userId: string, requestedIds: string[]) {
+    const targets = [...new Set(requestedIds)].filter(id => id !== userId).slice(0, 50);
+    if (!targets.length) return { data: [] as { userId: string; online: boolean; lastSeenAt: string | null }[] };
+    const shared = await this.prisma.conversationParticipant.findMany({
+      where: { userId, conversation: { participants: { some: { userId: { in: targets } } } } },
+      select: { conversation: { select: { participants: { select: { userId: true } } } } },
+    });
+    const allowed = new Set(shared.flatMap(row => row.conversation.participants.map(p => p.userId)).filter(id => targets.includes(id)));
+    if (!allowed.size) return { data: [] as { userId: string; online: boolean; lastSeenAt: string | null }[] };
+    const blockedRows = await this.prisma.block.findMany({ where: { OR: [{ blockerId: userId, blockedId: { in: [...allowed] } }, { blockedId: userId, blockerId: { in: [...allowed] } }] }, select: { blockerId: true, blockedId: true } });
+    const blocked = new Set(blockedRows.map(row => row.blockerId === userId ? row.blockedId : row.blockerId));
+    const visible = [...allowed].filter(id => !blocked.has(id));
+    const rows = visible.length ? await this.prisma.messagingPresence.findMany({ where: { userId: { in: visible }, lastSeenAt: { gt: new Date(Date.now() - 90_000) } }, select: { userId: true, lastSeenAt: true } }) : [];
+    const active = new Map(rows.map(row => [row.userId, row.lastSeenAt]));
+    return { data: visible.map(id => ({ userId: id, online: active.has(id), lastSeenAt: active.get(id)?.toISOString() ?? null })) };
+  }
+
+  async setTyping(userId: string, conversationId: string, typing: boolean) {
+    await this.authorize(userId, conversationId);
+    const now = new Date();
+    await this.prisma.messagingPresence.upsert({ where: { userId }, create: { userId, lastSeenAt: now, typingConversationId: typing ? conversationId : null, typingUntil: typing ? new Date(now.getTime() + 6_000) : null }, update: { lastSeenAt: now, typingConversationId: typing ? conversationId : null, typingUntil: typing ? new Date(now.getTime() + 6_000) : null } });
+    return { ok: true as const };
+  }
+
+  async getTyping(userId: string, conversationId: string) {
+    await this.authorize(userId, conversationId);
+    const participants = await this.prisma.conversationParticipant.findMany({ where: { conversationId, userId: { not: userId } }, select: { userId: true } });
+    const rows = await this.prisma.messagingPresence.findMany({ where: { userId: { in: participants.map(p => p.userId) }, typingConversationId: conversationId, typingUntil: { gt: new Date() } }, select: { userId: true } });
+    return { userIds: rows.map(row => row.userId) };
+  }
+
   async isSessionActive(userId: string, sessionId: string) {
     const session = await this.prisma.refreshSession.findFirst({
       where: {

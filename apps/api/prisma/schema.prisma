@@ -8,6 +8,12 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum ReportStatus {
   OPEN
   REVIEWED
@@ -84,6 +90,7 @@ model User {
   eventInterests     EventInterest[]
   notifications      Notification[] @relation("notificationRecipient")
   reports            Report[]      @relation("reporter")
+  verificationRequests VerificationRequest[]
   blocksMade         Block[]       @relation("blocker")
   blocksReceived     Block[]       @relation("blocked")
   createdAt          DateTime      @default(now())
@@ -104,10 +111,30 @@ model Profile {
   interests    String[]   @default([])
   skills       String[]   @default([])
   isPrivate    Boolean    @default(false)
+  verifiedAt   DateTime?
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   university   University @relation(fields: [universityId], references: [id], onDelete: Restrict)
   campus       Campus     @relation(fields: [campusId], references: [id], onDelete: Restrict)
   @@index([universityId, campusId])
+}
+
+model VerificationRequest {
+  id                String              @id @default(uuid()) @db.Uuid
+  userId            String              @db.Uuid
+  email             String
+  phone             String
+  fullName           String
+  course             String
+  campus             String
+  reason             String              @db.VarChar(800)
+  studentIdHash     String
+  status            VerificationStatus  @default(PENDING)
+  submittedAt        DateTime            @default(now())
+  reviewedAt         DateTime?
+  reviewerId         String?             @db.Uuid
+  reviewNote         String?             @db.VarChar(500)
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, status, submittedAt])
 }
 
 model RefreshSession {
@@ -387,4 +414,14 @@ model Block {
   blocked   User     @relation("blocked", fields: [blockedId], references: [id], onDelete: Cascade)
   @@id([blockerId, blockedId])
   @@index([blockedId])
+}
+
+model MessagingPresence {
+  userId               String   @id @db.Uuid
+  lastSeenAt            DateTime @default(now())
+  typingConversationId  String?  @db.Uuid
+  typingUntil           DateTime?
+  updatedAt              DateTime @updatedAt
+  @@index([lastSeenAt])
+  @@index([typingConversationId, typingUntil])
 }

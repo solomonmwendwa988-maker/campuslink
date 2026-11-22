@@ -1,19 +1,37 @@
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { UpdateProfileDto } from './profiles.dto.js';
+import { UpdateProfileDto, VerificationRequestDto } from './profiles.dto.js';
 
-const profileSelect = { id: true, username: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true } }, _count: { select: { follows: true, followedBy: true, posts: true } } } satisfies Prisma.UserSelect;
+const profileSelect = { id: true, username: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true, verifiedAt: true } }, _count: { select: { follows: true, followedBy: true, posts: true } } } satisfies Prisma.UserSelect;
 
 @Injectable()
 export class ProfilesService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async own(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId, deletedAt: null, deactivatedAt: null }, select: { id: true, username: true, email: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true } }, _count: { select: { follows: true, followedBy: true, posts: true } } } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId, deletedAt: null, deactivatedAt: null }, select: { id: true, username: true, email: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true, verifiedAt: true } }, _count: { select: { follows: true, followedBy: true, posts: true } } } });
     if (!user) throw new NotFoundException('Profile not found.');
     const { _count, ...publicUser } = user;
     return { user: { ...publicUser, counts: _count } };
+  }
+
+  async myVerification(userId: string) {
+    const request = await this.prisma.verificationRequest.findFirst({ where: { userId }, orderBy: { submittedAt: 'desc' }, select: { id: true, status: true, submittedAt: true, reviewedAt: true, reviewNote: true } });
+    return { request };
+  }
+
+  async requestVerification(userId: string, dto: VerificationRequestDto) {
+    if (!dto.attestationsAccepted) throw new ForbiddenException('You must confirm that your verification information is accurate.');
+    const existing = await this.prisma.verificationRequest.findFirst({ where: { userId, status: 'PENDING' }, select: { id: true } });
+    if (existing) throw new ConflictException('You already have a verification request awaiting review.');
+    const email = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+    if (!email) throw new NotFoundException('Account not found.');
+    const studentIdHash = createHash('sha256').update(dto.studentId.trim().toUpperCase()).digest('hex');
+    const request = await this.prisma.verificationRequest.create({ data: { userId, email: email.email, phone: dto.phone.trim(), fullName: dto.fullName.trim(), course: dto.course.trim(), campus: dto.campus.trim(), reason: dto.reason.trim(), studentIdHash, status: 'PENDING' }, select: { id: true, status: true, submittedAt: true } });
+    // Sensitive ID value is hashed and never stored in the request table. Manual review will be enabled in the admin workspace later.
+    return { request, message: 'Verification request submitted. It remains pending until the review process is available.' };
   }
 
   async discover(viewerId: string, search?: string) {
@@ -73,7 +91,7 @@ export class ProfilesService {
           if (!targetCampus) throw new NotFoundException('Campus is not available at your university.');
           profileData.campus = { connect: { id: targetCampus.id } };
         }
-        const user = await tx.user.update({ where: { id: userId }, data: { profile: { update: profileData } }, select: { id: true, username: true, profile: { select: { fullName: true, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true } } } });
+        const user = await tx.user.update({ where: { id: userId }, data: { profile: { update: profileData } }, select: { id: true, username: true, profile: { select: { fullName: true, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true, verifiedAt: true } } } });
         return { user };
       });
       return result;
