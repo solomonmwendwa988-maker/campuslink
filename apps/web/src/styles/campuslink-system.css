@@ -383,3 +383,80 @@
   .profile-page-v2 .profile-tabs button{padding:0 11px}
 }
 
+
+
+/* CampusLink profile reference refresh — stable, mobile-first layout */
+.profile-page-v2{width:100%;max-width:1180px;margin-inline:auto;overflow:visible;box-sizing:border-box}
+.profile-page-v2 .profile-cover{position:relative;height:clamp(220px,28vw,360px);min-height:220px;margin:0;border-radius:24px;overflow:hidden;background-color:#17356f;background-image:linear-gradient(135deg,#3157d6 0%,#18336b 55%,#101f42 100%);background-size:cover;background-position:center;box-sizing:border-box}
+.profile-page-v2 .profile-cover:after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,rgba(7,18,39,.78),rgba(7,18,39,.05) 72%);pointer-events:none}
+.profile-page-v2 .cover-art{position:absolute;z-index:1;left:clamp(20px,3vw,34px);right:20px;bottom:clamp(18px,3vw,30px);max-width:90%;font-size:clamp(10px,1vw,13px);font-weight:750;letter-spacing:clamp(1.2px,.16vw,2px);line-height:1.55;color:#f7f9ff;text-transform:uppercase;overflow-wrap:anywhere}
+.profile-page-v2 .profile-main{padding:0 clamp(18px,3.2vw,44px) 32px;box-sizing:border-box;min-width:0}
+.profile-page-v2 .profile-top{margin-top:-54px;min-height:138px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;position:relative;z-index:2}
+.profile-page-v2 .profile-top>.avatar{width:clamp(116px,13vw,158px);height:clamp(116px,13vw,158px);flex:0 0 auto;border:6px solid var(--bg);border-radius:50%;box-shadow:0 8px 26px rgba(13,27,48,.15);background:var(--panel);box-sizing:border-box}
+.profile-page-v2 .profile-actions{flex:1;min-width:0;display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:10px;padding-bottom:10px}
+.profile-page-v2 .profile-actions button{min-height:46px;padding-inline:clamp(12px,1.5vw,20px);border-radius:14px;white-space:normal;line-height:1.2}
+.profile-page-v2> .profile-main h1,.profile-page-v2 .profile-main h1{margin:26px 0 8px;font-size:clamp(27px,3vw,38px);line-height:1.15;letter-spacing:-.7px;overflow-wrap:anywhere}
+.profile-page-v2 .profile-handle{margin:0;color:var(--muted);font-size:clamp(13px,1.4vw,16px);line-height:1.5;overflow-wrap:anywhere}
+.profile-page-v2 .profile-bio{margin:18px 0 4px;font-size:15px;line-height:1.65;overflow-wrap:anywhere;max-width:780px}
+.profile-page-v2 .profile-facts{display:flex;align-items:center;flex-wrap:wrap;gap:10px 24px;margin:24px 0 20px}
+.profile-page-v2 .profile-facts .profile-stat{min-width:0;padding:0;border:0;border-radius:0;background:transparent;display:inline-flex;flex-direction:row;align-items:baseline;gap:5px;color:var(--text);font-size:14px;line-height:1.4}
+.profile-page-v2 .profile-facts .profile-stat b{font-size:15px;color:var(--text);font-weight:750}
+.profile-page-v2 .profile-facts .profile-stat-button{font-family:inherit;background:transparent;border:0;border-radius:7px;padding:3px 2px}
+.profile-page-v2 .profile-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:18px 0 24px}
+.profile-page-v2 .profile-meta>span{display:inline-flex;align-items:center;min-height:34px;padding:7px 12px;border-radius:10px;background:color-mix(in srgb,var(--accent) 8%,var(--panel));color:var(--text);font-size:12px;line-height:1.35;max-width:100%;overflow-wrap:anywhere}
+.profile-page-v2 .profile-tabs{display:flex;align-items:center;gap:8px;width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;padding:4px 0 10px;margin:0 0 18px;border-bottom:1px solid var(--line);box-sizing:border-box}
+.profile-page-v2 .profile-tabs button{flex:0 0 auto;min-height:44px;padding:0 18px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);font:600 13px inherit;white-space:nowrap}
+.profile-page-v2 .profile-tabs button.selected{background:var(--campus-navy,#142a50);border-color:var(--campus-navy,#142a50);color:#fff}
+.profile-page-v2 .profile-post-grid,.profile-page-v2 .profile-listings{min-width:0;max-width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.profile-page-v2 .profile-post{min-width:0;overflow:hidden;border-radius:16px}
+.profile-page-v2 .profile-post img{max-width:100%;height:auto;max-height:480px;aspect-ratio:16/10;object-fit:cover}
+.profile-page-v2 .profile-post p{padding:12px 14px;line-height:1.65;overflow-wrap:anywhere}
+.profile-page-v2 .profile-post small{padding:0 14px 14px;color:var(--muted);font-size:12px}
+.profile-page-v2 .about-card{border-radius:16px;padding:clamp(16px,2.5vw,28px)}
+.profile-page-v2 .about-card dl{display:grid;grid-template-columns:minmax(110px,160px) minmax(0,1fr);gap:12px;overflow-wrap:anywhere}
+.profile-page-v2 .profile-loading,.profile-page-v2 .profile-private{max-width:100%;box-sizing:border-box}
+@media(max-width:700px){
+ .profile-page-v2{width:100%;max-width:100%;}
+ .profile-page-v2 .profile-cover{height:clamp(210px,48vw,290px);min-height:210px;border-radius:18px}
+ .profile-page-v2 .profile-main{padding:0 18px 22px}
+ .profile-page-v2 .profile-top{margin-top:-54px;min-height:142px;align-items:flex-end;gap:12px;flex-wrap:wrap}
+ .profile-page-v2 .profile-top>.avatar{width:132px;height:132px;border-width:5px}
+ .profile-page-v2 .profile-actions{flex:1 1 100%;width:100%;padding:0;margin:8px 0 0;justify-content:flex-end;gap:8px}
+ .profile-page-v2 .profile-actions button{flex:1 1 auto;min-height:48px;padding:0 12px;font-size:12px}
+ .profile-page-v2 .profile-main h1{margin-top:24px;font-size:29px}
+ .profile-page-v2 .profile-handle{font-size:14px}
+ .profile-page-v2 .profile-facts{gap:8px 18px;margin:20px 0}
+ .profile-page-v2 .profile-facts .profile-stat{font-size:13px}
+ .profile-page-v2 .profile-facts .profile-stat b{font-size:14px}
+ .profile-page-v2 .profile-meta{gap:7px;margin:16px 0 20px}
+ .profile-page-v2 .profile-meta>span{font-size:12px;padding:7px 10px}
+ .profile-page-v2 .profile-tabs{gap:7px;margin-bottom:14px}
+ .profile-page-v2 .profile-tabs button{min-height:43px;padding:0 15px;font-size:12px}
+ .profile-page-v2 .profile-post-grid,.profile-page-v2 .profile-listings{grid-template-columns:minmax(0,1fr);gap:12px}
+ .profile-page-v2 .profile-post img{max-height:420px;aspect-ratio:16/10}
+}
+@media(max-width:420px){
+ .profile-page-v2 .profile-cover{height:205px;min-height:205px;border-radius:15px}
+ .profile-page-v2 .profile-main{padding-inline:13px}
+ .profile-page-v2 .profile-top{margin-top:-46px;min-height:128px}
+ .profile-page-v2 .profile-top>.avatar{width:116px;height:116px}
+ .profile-page-v2 .profile-actions button{font-size:11px;padding-inline:8px;min-width:0}
+ .profile-page-v2 .profile-main h1{font-size:26px;margin-top:22px}
+ .profile-page-v2 .profile-facts{gap:7px 13px}
+ .profile-page-v2 .profile-tabs button{padding-inline:12px}
+}
+
+/* Auth surfaces use the same CampusLink palette and controls as the app. */
+.auth-page-v2{background:var(--bg)!important;color:var(--text);min-height:100svh;}
+.auth-page-v2 .auth-card-v2{background:var(--panel);border:1px solid var(--line);color:var(--text);box-shadow:0 18px 48px rgba(16,38,79,.09);}
+.auth-page-v2 .auth-card-head h1{color:var(--text)}
+.auth-page-v2 .auth-card-head>span,.auth-page-v2 .auth-field,.auth-page-v2 .auth-disclaimer{color:var(--muted)}
+.auth-page-v2 .auth-field input,.auth-page-v2 .auth-field select,.auth-page-v2 .auth-field textarea{background:var(--bg);color:var(--text);border-color:var(--line);box-sizing:border-box;}
+.auth-page-v2 .auth-field input:focus,.auth-page-v2 .auth-field select:focus,.auth-page-v2 .auth-field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
+.auth-page-v2 .auth-submit{background:var(--campus-navy,#142a50)!important;color:#fff!important;border-radius:12px;}
+.auth-page-v2 .auth-home-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 12px;margin:0 0 16px;border:1px solid var(--line);border-radius:11px;background:var(--bg);color:var(--text);font:600 12px inherit;text-decoration:none;cursor:pointer;transition:background .18s,border-color .18s,transform .18s}
+.auth-page-v2 .auth-home-button:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--panel));transform:translateY(-1px)}
+.auth-page-v2 .auth-home-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.auth-page-v2 .auth-submit-row{gap:10px;flex-wrap:wrap}
+.auth-page-v2 .auth-submit-row .auth-submit{flex:1;min-width:150px}
+@media(max-width:540px){.auth-page-v2 .auth-home-button{width:max-content;margin-bottom:12px}.auth-page-v2 .auth-card-v2{background:var(--panel);border:1px solid var(--line);box-shadow:0 12px 32px rgba(16,38,79,.07)}}

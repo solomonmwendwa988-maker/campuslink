@@ -1,4 +1,5 @@
 import { FormEvent, InputHTMLAttributes, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { ApiUser } from '../../services/api';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -7,6 +8,7 @@ import {
   Eye,
   EyeOff,
   LockKeyhole,
+  Home,
   Sparkles,
   UserRound,
 } from 'lucide-react';
@@ -95,6 +97,7 @@ export function AuthPage({
     registration?: Omit<Registration, 'password' | 'confirm'>,
   ) => void;
 }) {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(emptyRegistration);
   const [visible, setVisible] = useState(false);
@@ -419,6 +422,9 @@ export function AuthPage({
         noValidate
       >
         <header className="auth-card-head">
+          <button type="button" className="auth-home-button" onClick={() => navigate('/')}>
+            <Home size={15} /> Back to home
+          </button>
           <div className="brand auth-mobile-brand">
             <span className="brand-mark">
               <Sparkles size={15} />
