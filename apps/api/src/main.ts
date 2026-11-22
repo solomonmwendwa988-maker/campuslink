@@ -9,6 +9,7 @@ import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false });
+  app.use(express.raw({ type: 'audio/*', limit: '8mb' }));
   app.use(express.json({ limit: '3mb' }));
   app.use(express.urlencoded({ extended: true, limit: '3mb' }));
   const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:5173')

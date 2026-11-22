@@ -54,3 +54,30 @@
 .message-receipt.delivered{opacity:.9}
 .message-receipt.seen{font-weight:600;opacity:1}
 @media(max-width:720px){.message-receipt{font-size:10px}.instagram-messages,.instagram-messages *{min-width:0;box-sizing:border-box}.instagram-messages .conversation-details{flex:1;overflow:hidden}.instagram-messages .conversation-details small{max-width:100%;overflow:hidden;text-overflow:ellipsis}.instagram-messages .chat-active{width:100%;max-width:100%;overflow:hidden}.instagram-messages .ig-chat-scroll{overflow-x:hidden}.instagram-messages .ig-chat-send{width:auto;max-width:calc(100% - 20px)}.instagram-messages .ig-chat-send input{min-width:0;flex:1}.instagram-messages .chat-profile-intro{max-width:100%}}
+
+/* Major messaging refresh: fixed circular avatars, voice notes and contact actions */
+.instagram-messages .avatar,.instagram-messages .conversation .avatar,.instagram-messages .chat-head .avatar,.instagram-messages .chat-profile-intro .avatar{width:52px;height:52px;min-width:52px;max-width:52px;flex:0 0 52px;aspect-ratio:1/1;border-radius:50%!important;overflow:hidden}
+.instagram-messages .conversation .avatar{width:58px;height:58px;min-width:58px;max-width:58px;flex-basis:58px}
+.instagram-messages .chat-head .avatar{width:42px;height:42px;min-width:42px;max-width:42px;flex-basis:42px}
+.instagram-messages .chat-profile-intro .avatar{width:68px;height:68px;min-width:68px;max-width:68px;flex-basis:68px}
+.instagram-messages .avatar img{width:100%;height:100%;display:block;object-fit:cover;object-position:center;border-radius:50%}
+.chat-contact-profile{display:flex;align-items:center;gap:12px;min-width:0;flex:1;text-align:left;border-radius:12px;padding:5px 8px;margin-left:-8px}
+.chat-contact-profile:hover{background:var(--panel2)}
+.chat-contact-menu-trigger{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;color:var(--muted)}
+.chat-contact-menu-trigger:hover{background:var(--panel2);color:var(--text)}
+.conversation-contact-menu{position:absolute;z-index:20;right:14px;top:72px;width:min(240px,calc(100% - 28px));padding:7px;background:var(--panel);border:1px solid var(--line);border-radius:13px;box-shadow:0 18px 44px rgba(8,15,30,.2);display:grid;gap:2px}
+.conversation-contact-menu button{display:flex;align-items:center;gap:9px;text-align:left;padding:11px;border-radius:9px;font-size:12px;color:var(--text)}
+.conversation-contact-menu button:hover{background:var(--panel2)}.conversation-contact-menu button.danger{color:#d94d5c}
+.voice-record-button{width:40px;height:40px;flex:none;border-radius:50%;display:grid;place-items:center;color:var(--muted);background:var(--panel2)}
+.voice-record-button:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel2))}
+.voice-recording-controls,.voice-preview{width:100%;display:flex;align-items:center;gap:10px;padding:5px 8px;min-height:44px}
+.voice-recording-controls>span:nth-of-type(2){color:var(--muted);font-size:11px;flex:1}.voice-recording-controls button,.voice-preview button{padding:9px;border-radius:9px;background:var(--panel2);color:var(--text);font-size:11px}
+.voice-recording-controls .recording-dot{width:9px;height:9px;border-radius:50%;background:#e34552;animation:voice-pulse 1s ease-in-out infinite}
+.voice-preview audio{min-width:0;flex:1;height:38px}.voice-preview span{font-size:11px;color:var(--muted)}.voice-message{display:grid;gap:6px;min-width:min(240px,55vw)}.voice-message audio{width:100%;height:38px}.voice-message span{font-size:10px;opacity:.75}
+@keyframes voice-pulse{50%{opacity:.35;transform:scale(.82)}}
+.instagram-messages .conversation-items .avatar{width:58px;height:58px;min-width:58px;flex-basis:58px}
+@media(max-width:720px){.conversation-contact-menu{top:64px;right:10px}.voice-preview{flex-wrap:wrap}.voice-preview audio{width:100%;flex-basis:100%}.voice-recording-controls>span:nth-of-type(2){display:none}}
+
+.instagram-messages .chat-active{position:relative}
+
+.inbox-skeleton{display:grid;gap:8px;padding-top:8px}.inbox-skeleton-row{display:flex;align-items:center;gap:12px;padding:11px 8px}.skeleton-avatar{width:54px;height:54px;border-radius:50%;flex:0 0 54px}.skeleton-line{height:12px;flex:1;max-width:150px}.skeleton-time{height:9px;width:38px}.chat-skeleton{display:flex;flex-direction:column;gap:12px;padding:16px}.skeleton-message{height:56px;width:44%;border-radius:18px}.skeleton-message.left{align-self:flex-start}.skeleton-message.right{align-self:flex-end;width:36%}

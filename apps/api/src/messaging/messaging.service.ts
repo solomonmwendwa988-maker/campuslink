@@ -1,5 +1,6 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const conversationInclude = {
@@ -15,6 +16,9 @@ const messageInclude = {
   reactions: { select: { userId: true, reaction: true } },
 } satisfies Prisma.MessageInclude;
 const pageSize = 40;
+
+// Structural upload type keeps the voice endpoint independent of Express/Multer ambient typings.
+type VoiceUploadFile = { buffer: Buffer; mimetype: string; originalname?: string; size?: number };
 
 @Injectable()
 export class MessagingService {
@@ -38,12 +42,16 @@ export class MessagingService {
     const memberships = await this.prisma.conversationParticipant.findMany({ where: { userId }, include: { conversation: { include: conversationListInclude } }, orderBy: { conversation: { updatedAt: 'desc' } } });
     const conversationIds = memberships.map((membership) => membership.conversationId);
     if (conversationIds.length) await this.prisma.message.updateMany({ where: { conversationId: { in: conversationIds }, senderId: { not: userId }, deliveredAt: null }, data: { deliveredAt: new Date() } });
-    const conversations = await Promise.all(memberships.map(async ({ conversation }) => {
+    const unreadRows = conversationIds.length ? await this.prisma.message.groupBy({ by: ['conversationId'], where: { conversationId: { in: conversationIds }, senderId: { not: userId }, readAt: null }, _count: { _all: true } }) : [];
+    const unreadByConversation = new Map(unreadRows.map((row) => [row.conversationId, row._count._all]));
+    const blockedIds = new Set((await this.prisma.block.findMany({ where: { OR: [{ blockerId: userId }, { blockedId: userId }] }, select: { blockerId: true, blockedId: true } })).flatMap((row) => row.blockerId === userId ? [row.blockedId] : [row.blockerId]));
+    const muteRows = conversationIds.length ? await this.prisma.conversationMute.findMany({ where: { conversationId: { in: conversationIds }, userId }, select: { conversationId: true } }) : [];
+    const mutedIds = new Set(muteRows.map(row => row.conversationId));
+    const conversations = memberships.map(({ conversation }) => {
       const other = conversation.participants.find((member) => member.userId !== userId);
-      if (!other || await this.prisma.block.findFirst({ where: { OR: [{ blockerId: userId, blockedId: other.userId }, { blockerId: other.userId, blockedId: userId }] } })) return null;
-      const unreadCount = await this.prisma.message.count({ where: { conversationId: conversation.id, senderId: { not: userId }, readAt: null } });
-      return { id: conversation.id, participants: conversation.participants.filter((member) => member.userId !== userId).map((member) => member.user), lastMessage: conversation.messages[0] ?? null, unreadCount, updatedAt: conversation.updatedAt };
-    }));
+      if (!other || blockedIds.has(other.userId)) return null;
+      return { id: conversation.id, participants: conversation.participants.filter((member) => member.userId !== userId).map((member) => member.user), lastMessage: conversation.messages[0] ?? null, unreadCount: unreadByConversation.get(conversation.id) ?? 0, muted: mutedIds.has(conversation.id), updatedAt: conversation.updatedAt };
+    });
     return { data: conversations.filter((conversation): conversation is NonNullable<typeof conversation> => conversation !== null) };
   }
 
@@ -105,6 +113,49 @@ export class MessagingService {
     }
   }
 
+  async sendVoice(userId: string, conversationId: string, file: VoiceUploadFile, clientMessageId: string) {
+    await this.authorize(userId, conversationId);
+    if (!clientMessageId || clientMessageId.length < 8 || clientMessageId.length > 100) throw new ForbiddenException('Invalid voice message identifier.');
+    const prior = await this.prisma.message.findUnique({ where: { senderId_clientMessageId: { senderId: userId, clientMessageId } }, include: messageInclude });
+    if (prior) return { message: prior, duplicate: true };
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    if (!cloudName || !apiKey || !apiSecret) throw new ForbiddenException('Voice messages are not configured yet. Configure Cloudinary storage on the API.');
+    const timestamp = Math.floor(Date.now() / 1000);
+    const folder = 'campuslink/voice';
+    const signature = createHash('sha1').update(`folder=${folder}&timestamp=${timestamp}${apiSecret}`).digest('hex');
+    const form = new FormData();
+    form.append('file', new Blob([Uint8Array.from(file.buffer).buffer], { type: file.mimetype }), file.originalname || 'voice-message');
+    form.append('api_key', apiKey); form.append('timestamp', String(timestamp)); form.append('folder', folder); form.append('signature', signature);
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, { method: 'POST', body: form });
+    if (!response.ok) throw new ForbiddenException('Voice upload failed. Please try again.');
+    const uploaded = await response.json() as { secure_url?: string; resource_type?: string; duration?: number };
+    if (!uploaded.secure_url) throw new ForbiddenException('Voice upload did not return a media URL.');
+    const other = await this.prisma.conversationParticipant.findFirst({ where: { conversationId, userId: { not: userId } }, select: { userId: true } });
+    if (!other) throw new NotFoundException('Conversation not found.');
+    const message = await this.prisma.$transaction(async (tx) => {
+      const saved = await tx.message.create({ data: { conversationId, senderId: userId, content: 'Voice message', clientMessageId, attachments: { create: { url: uploaded.secure_url!, mediaType: file.mimetype } } }, include: messageInclude });
+      await tx.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
+      await tx.notification.create({ data: { recipientId: other.userId, actorId: userId, type: 'MESSAGE', entityId: saved.id } });
+      return saved;
+    });
+    return { message, duplicate: false };
+  }
+
+
+  async muteConversation(userId: string, conversationId: string) {
+    await this.authorize(userId, conversationId);
+    await this.prisma.conversationMute.upsert({ where: { conversationId_userId: { conversationId, userId } }, update: {}, create: { conversationId, userId } });
+    return { muted: true };
+  }
+
+  async unmuteConversation(userId: string, conversationId: string) {
+    await this.authorize(userId, conversationId);
+    await this.prisma.conversationMute.deleteMany({ where: { conversationId, userId } });
+    return { muted: false };
+  }
+
   async markRead(userId: string, conversationId: string) {
     await this.authorize(userId, conversationId);
     const now = new Date();
@@ -121,3 +172,4 @@ export class MessagingService {
     return { readAt: now.toISOString() };
   }
 }
+

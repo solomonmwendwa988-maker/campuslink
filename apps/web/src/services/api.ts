@@ -90,7 +90,7 @@ async function request<T>(
   const headers = new Headers(fetchOptions.headers);
   headers.set('Accept', 'application/json');
 
-  if (fetchOptions.body && !headers.has('Content-Type')) {
+  if (fetchOptions.body && !headers.has('Content-Type') && !(fetchOptions.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -301,6 +301,7 @@ export interface ApiConversation {
   participants: MessagingPerson[];
   lastMessage: ApiMessage | null;
   unreadCount: number;
+  muted?: boolean;
   updatedAt: string;
 }
 
@@ -323,6 +324,20 @@ export async function sendConversationMessage(conversationId: string, content: s
 }
 export async function markConversationRead(conversationId: string) {
   return request<{ readAt: string }>(`/messages/conversations/${encodeURIComponent(conversationId)}/read`, { method: 'POST', authenticated: true });
+}
+export async function muteConversation(conversationId: string) { return request<{ muted: boolean }>(`/messages/conversations/${encodeURIComponent(conversationId)}/mute`, { method: 'POST', authenticated: true }); }
+export async function unmuteConversation(conversationId: string) { return request<{ muted: boolean }>(`/messages/conversations/${encodeURIComponent(conversationId)}/mute`, { method: 'DELETE', authenticated: true }); }
+
+export async function sendVoiceMessage(conversationId: string, audio: Blob, clientMessageId: string) {
+  const contentType = audio.type.split(';')[0] || 'audio/webm';
+  return request<{ message: ApiMessage; duplicate?: boolean }>(`/messages/conversations/${encodeURIComponent(conversationId)}/voice?clientMessageId=${encodeURIComponent(clientMessageId)}`, { method: 'POST', authenticated: true, headers: { 'Content-Type': contentType }, body: audio });
+}
+
+export async function blockUser(userId: string) {
+  return request<{ blocked: boolean }>('/safety/block', { method: 'POST', authenticated: true, body: JSON.stringify({ userId }) });
+}
+export async function reportUser(userId: string, reason: 'SPAM'|'HARASSMENT'|'INAPPROPRIATE'|'FRAUD'|'OTHER', details?: string) {
+  return request<{ report: { id: string; targetType: string; status: string } }>('/safety/reports', { method: 'POST', authenticated: true, body: JSON.stringify({ targetType: 'USER', targetId: userId, reason, details }) });
 }
 
 export interface DiscoverStudent {

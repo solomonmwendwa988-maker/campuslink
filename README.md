@@ -61,3 +61,10 @@ The API currently implements health checks, registration/login/logout, refresh-t
 This is not yet a production-ready service. Supabase file uploads, email delivery and usable verification/reset token flows, listing/event image handling, full notification event coverage, Socket.IO integration in the frontend, and database-backed end-to-end/security tests still need implementation and external configuration. The frontend remains demo mode and is not yet wired to these API routes; this avoids mixing demo records with production accounts. The backend must not be marketed as ready for real students until those gaps are closed and the integration/security test suite is run against a configured database.
 
 Prisma migrations are versioned under `apps/api/prisma/migrations`; use `migrate dev` only against a disposable development database and `migrate deploy` in controlled deployment. Do not use `prisma db push` for production.
+
+
+## Voice message storage configuration
+
+Voice-message uploads require server-side Cloudinary credentials. Configure these variables in the API deployment environment (never in the frontend): `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET`. The API accepts audio uploads up to 8 MB and stores them in the `campuslink/voice` folder. If credentials are not configured, the endpoint returns an explicit configuration error.
+
+Apply the new conversation-mute migration before deploying the API: `npm run db:migrate -w apps/api` (or your configured deploy migration command).
