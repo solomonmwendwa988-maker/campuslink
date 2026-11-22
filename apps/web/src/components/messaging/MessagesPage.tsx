@@ -34,6 +34,7 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
+  const [inboxError, setInboxError] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -66,15 +67,24 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
   }), [conversations, search]);
 
   const refreshConversations = useCallback(async (quiet = false) => {
-    if (!quiet) setLoadingList(true);
+    if (!quiet) { setLoadingList(true); setInboxError(''); }
+    let timeoutId: number | undefined;
+    let timedOut = false;
+    const controller = new AbortController();
     try {
-      const result = await listConversations();
-      setConversations(result.data);
+      // A slow/hung API must never leave the mobile inbox in an invisible loading state.
+      timeoutId = window.setTimeout(() => { timedOut = true; controller.abort(); }, 12000);
+      const result = await listConversations(controller.signal);
+      setConversations(Array.isArray(result.data) ? result.data : []);
       setSelectedId(current => current && result.data.some(item => item.id === current) ? current : null);
-      setError('');
+      setError(''); setInboxError('');
     } catch (err) {
-      if (!quiet) setError(err instanceof Error ? err.message : 'Could not load conversations.');
-    } finally { if (!quiet) setLoadingList(false); }
+      const message = timedOut ? 'The inbox is taking too long to load. Check your connection and retry.' : err instanceof Error ? err.message : 'Could not load conversations.';
+      if (!quiet) { setInboxError(message); setError(''); }
+    } finally {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      if (!quiet) setLoadingList(false);
+    }
   }, []);
 
   const refreshMessages = useCallback(async (conversationId: string, quiet = false, acknowledge = false) => {
@@ -121,7 +131,7 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
     if (!ids.length) { setOnlineUsers(new Set()); return; }
     let cancelled = false;
     const poll = () => { if (document.visibilityState !== 'visible') return; void getPresence(ids).then(result => { if (!cancelled) setOnlineUsers(new Set(result.data.filter(status => status.online).map(status => status.userId))); }).catch(() => undefined); };
-    poll(); const timer = window.setInterval(poll, 5000); return () => { cancelled = true; window.clearInterval(timer); };
+    poll(); const timer = window.setInterval(poll, 15000); return () => { cancelled = true; window.clearInterval(timer); };
   }, [conversations]);
   // Acknowledge read status only when the conversation selection changes (explicit open).
   useEffect(() => {
@@ -205,9 +215,10 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
       <label className="message-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search conversations" aria-label="Search conversations"/><button type="button" onClick={() => setSearch('')} aria-label="Clear search"><X size={15}/></button></label>
       {newChatOpen && <form className="new-chat-form" onSubmit={createChat}><input value={newUsername} onChange={event => setNewUsername(event.target.value)} placeholder="Student username" autoFocus/><button type="submit" disabled={!newUsername.trim()}>Start</button></form>}
       {error && <div className="messages-error" role="alert">{error}</div>}
-      <div className="conversation-items">
-        {loadingList && conversations.length === 0 && <div className="inbox-skeleton" aria-label="Loading conversations">{Array.from({length:4},(_,i)=><div className="inbox-skeleton-row" key={i}><span className="skeleton skeleton-avatar"/><span className="skeleton skeleton-line"/><span className="skeleton skeleton-time"/></div>)}</div>}
-        {!loadingList && conversations.length === 0 && <div className="inbox-empty"><MessageCircle size={25}/><strong>Your messages are waiting</strong><span>Start a conversation with a student from Explore.</span><button onClick={() => setNewChatOpen(true)}>New message</button></div>}
+      <div className="conversation-items" aria-live="polite">
+        {loadingList && conversations.length === 0 && <div className="inbox-loading" role="status"><span className="inbox-loading-spinner"/><strong>Loading conversations</strong><span>Connecting to your inbox…</span></div>}
+        {!loadingList && inboxError && conversations.length === 0 && <div className="inbox-load-error" role="alert"><MessageCircle size={24}/><strong>Couldn't load your inbox</strong><span>{inboxError}</span><button type="button" onClick={() => void refreshConversations()}>Try again</button></div>}
+        {!loadingList && !inboxError && conversations.length === 0 && <div className="inbox-empty"><MessageCircle size={25}/><strong>Your messages are waiting</strong><span>Start a conversation with a student from Explore.</span><button onClick={() => setNewChatOpen(true)}>New message</button></div>}
         {filtered.map(item => { const student = item.participants[0]; const title = personName(student); const last = item.lastMessage; const isMine = Boolean(last && item.participants.every(p => p.id !== last.senderId)); return <button className={`conversation ig-conversation${selectedId === item.id ? ' selected' : ''}`} key={item.id} onClick={() => openConversation(item.id)}>
           <span className={`conversation-avatar${student && onlineUsers.has(student.id) ? ' is-online' : ''}`}><Avatar initials={initials(title)} image={student?.profile?.photoUrl ?? undefined}/>{student && onlineUsers.has(student.id) && <i aria-label="Online" title="Online"/>}</span><span className="conversation-details"><strong>{title}</strong><small>{last ? `${isMine ? 'You: ' : ''}${last.content}` : 'Start a conversation'}</small></span><span className="conversation-meta"><small>{timeLabel(last?.createdAt ?? item.updatedAt)}</small>{item.unreadCount > 0 && <b>{item.unreadCount}</b>}</span>
         </button>})}

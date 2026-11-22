@@ -305,8 +305,8 @@ export interface ApiConversation {
   updatedAt: string;
 }
 
-export async function listConversations() {
-  return request<{ data: ApiConversation[] }>('/messages/conversations', { authenticated: true });
+export async function listConversations(signal?: AbortSignal) {
+  return request<{ data: ApiConversation[] }>('/messages/conversations', { authenticated: true, signal });
 }
 export async function startConversation(username: string) {
   return request<{ conversation: ApiConversation }>('/messages/conversations', {
