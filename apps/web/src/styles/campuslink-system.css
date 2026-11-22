@@ -152,3 +152,234 @@
 @media (prefers-reduced-motion: reduce) {
   .sidebar, .mobile-drawer-backdrop { transition: none !important; animation: none !important; }
 }
+
+/* CampusLink Phase 2.3 — mobile-first profile refinement */
+.profile-page-v2{
+  border-radius:0;
+  border:0;
+  box-shadow:none;
+  background:var(--bg);
+}
+.profile-page-v2 .profile-cover{
+  height:clamp(190px,32vw,310px);
+  border-radius:18px;
+  margin:0 0 0;
+  padding:clamp(18px,3vw,28px);
+  background-size:cover;
+  background-position:center;
+}
+.profile-page-v2 .profile-cover:after{
+  background:linear-gradient(0deg,rgba(8,19,39,.62),rgba(8,19,39,.08) 55%,rgba(8,19,39,.06));
+}
+.profile-page-v2 .cover-art{
+  max-width:100%;
+  font-size:clamp(10px,1.2vw,13px);
+  letter-spacing:clamp(1.3px,.2vw,2.5px);
+  line-height:1.55;
+  text-transform:uppercase;
+  overflow-wrap:anywhere;
+}
+.profile-page-v2 .profile-main{
+  padding:0 clamp(18px,4vw,36px) 24px;
+}
+.profile-page-v2 .profile-top{
+  margin-top:-62px;
+  align-items:flex-end;
+  gap:18px;
+}
+.profile-page-v2 .profile-top>.avatar{
+  width:clamp(108px,15vw,150px);
+  height:clamp(108px,15vw,150px);
+  flex:0 0 auto;
+  border-radius:50%;
+  border:5px solid var(--bg);
+  box-shadow:0 5px 18px rgba(10,20,35,.16);
+  font-size:24px;
+}
+.profile-page-v2 .profile-actions{
+  width:auto;
+  flex:1;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.profile-page-v2 .profile-actions button{
+  min-height:46px;
+  flex:0 1 auto;
+  padding:0 16px;
+  border-radius:14px;
+  font-size:13px;
+}
+.profile-page-v2 h1{
+  margin:24px 0 5px;
+  font-size:clamp(25px,4vw,34px);
+  line-height:1.2;
+}
+.profile-page-v2 .profile-handle{
+  font-size:clamp(13px,1.5vw,16px);
+  margin-bottom:12px;
+}
+.profile-page-v2 .profile-bio{
+  font-size:clamp(14px,1.5vw,16px);
+  line-height:1.65;
+}
+.profile-page-v2 .profile-facts{
+  display:flex;
+  align-items:center;
+  gap:clamp(14px,3vw,28px);
+  margin:22px 0;
+}
+.profile-page-v2 .profile-facts .profile-stat,
+.profile-page-v2 .profile-facts .profile-stat-button{
+  min-width:0;
+  border:0;
+  background:transparent;
+  border-radius:0;
+  padding:0;
+  display:inline-flex;
+  flex-direction:row;
+  align-items:baseline;
+  gap:5px;
+  color:var(--text);
+  font-size:14px;
+  text-align:left;
+  white-space:nowrap;
+}
+.profile-page-v2 .profile-facts .profile-stat b,
+.profile-page-v2 .profile-facts .profile-stat-button b{
+  font-size:15px;
+  font-weight:750;
+  color:var(--text);
+}
+.profile-page-v2 .profile-facts .profile-stat-button:hover{
+  background:transparent;
+  border:0;
+  transform:none;
+  text-decoration:underline;
+  text-decoration-color:var(--accent);
+}
+.profile-page-v2 .profile-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:9px 12px;
+  margin:18px 0 22px;
+}
+.profile-page-v2 .profile-meta>span{
+  border:0;
+  border-radius:9px;
+  padding:8px 12px;
+  font-size:13px;
+  background:color-mix(in srgb,var(--accent) 9%,var(--panel));
+}
+.profile-page-v2 .profile-tabs{
+  border:0;
+  display:flex;
+  gap:8px;
+  padding:2px 0 8px;
+  margin:0 -2px 12px;
+  overflow-x:auto;
+  overscroll-behavior-x:contain;
+  scrollbar-width:none;
+}
+.profile-page-v2 .profile-tabs::-webkit-scrollbar{display:none}
+.profile-page-v2 .profile-tabs button{
+  min-height:44px;
+  padding:0 17px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:transparent;
+  color:var(--muted);
+  font-size:13px;
+  flex:0 0 auto;
+}
+.profile-page-v2 .profile-tabs button.selected{
+  background:var(--text);
+  color:var(--bg);
+  border:1px solid var(--text);
+  box-shadow:none;
+}
+.profile-page-v2 .profile-post-grid{
+  padding-top:8px;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.profile-page-v2 .profile-post{
+  padding:12px;
+  border-radius:16px;
+  background:var(--panel);
+}
+.profile-page-v2 .profile-post img{
+  height:clamp(140px,22vw,230px);
+  border-radius:12px;
+}
+.profile-page-v2 .about-card{padding:clamp(14px,3vw,22px)}
+@media(max-width:700px){
+  .profile-page-v2{overflow:visible}
+  .profile-page-v2 .profile-cover{
+    height:clamp(205px,48vw,280px);
+    border-radius:16px;
+    padding:14px;
+  }
+  .profile-page-v2 .cover-art{
+    font-size:10px;
+    letter-spacing:1.6px;
+    line-height:1.5;
+    max-width:90%;
+  }
+  .profile-page-v2 .profile-main{padding:0 18px 18px}
+  .profile-page-v2 .profile-top{
+    margin-top:-58px;
+    align-items:flex-end;
+    gap:12px;
+  }
+  .profile-page-v2 .profile-top>.avatar{
+    width:132px;
+    height:132px;
+    border-radius:50%;
+    border-width:5px;
+  }
+  .profile-page-v2 .profile-actions{
+    flex:1 1 100%;
+    width:100%;
+    justify-content:flex-end;
+    margin-top:12px;
+  }
+  .profile-page-v2 .profile-actions button{
+    min-height:48px;
+    padding:0 12px;
+    flex:1 1 0;
+    font-size:12px;
+    border-radius:13px;
+  }
+  .profile-page-v2 h1{margin-top:22px;font-size:29px}
+  .profile-page-v2 .profile-handle{font-size:14px;line-height:1.6}
+  .profile-page-v2 .profile-bio{font-size:14px}
+  .profile-page-v2 .profile-facts{
+    display:flex;
+    flex-wrap:wrap;
+    gap:14px 18px;
+    margin:20px 0;
+  }
+  .profile-page-v2 .profile-facts .profile-stat,
+  .profile-page-v2 .profile-facts .profile-stat-button{
+    font-size:13px;
+    gap:4px;
+  }
+  .profile-page-v2 .profile-facts .profile-stat b,
+  .profile-page-v2 .profile-facts .profile-stat-button b{font-size:14px}
+  .profile-page-v2 .profile-meta{gap:8px;margin:16px 0 20px}
+  .profile-page-v2 .profile-meta>span{padding:8px 11px;font-size:12px}
+  .profile-page-v2 .profile-tabs{gap:7px}
+  .profile-page-v2 .profile-tabs button{min-height:44px;padding:0 14px;font-size:12px}
+  .profile-page-v2 .profile-post-grid{grid-template-columns:1fr;gap:10px}
+  .profile-page-v2 .profile-post img{height:auto;max-height:360px;aspect-ratio:16/10}
+}
+@media(max-width:390px){
+  .profile-page-v2 .profile-main{padding-inline:13px}
+  .profile-page-v2 .profile-top>.avatar{width:112px;height:112px}
+  .profile-page-v2 .profile-actions{gap:7px}
+  .profile-page-v2 .profile-actions button{padding:0 8px;font-size:11px}
+  .profile-page-v2 .profile-facts{gap:10px 13px}
+  .profile-page-v2 .profile-tabs button{padding:0 11px}
+}
+
