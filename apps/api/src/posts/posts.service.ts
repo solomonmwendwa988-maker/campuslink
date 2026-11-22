@@ -26,7 +26,9 @@ export class PostsService {
       include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true, reposts: true, views: true } }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } }, bookmarks: { where: { userId: viewerId }, select: { userId: true } }, reposts: { where: { userId: viewerId }, select: { userId: true } }, views: { where: { userId: viewerId }, select: { userId: true } } } : {}) },
     });
     const ranked = popularMode ? rows.sort((a, b) => (b._count.likes + b._count.comments * 2 + b._count.reposts * 3) - (a._count.likes + a._count.comments * 2 + a._count.reposts * 3) || b.createdAt.getTime() - a.createdAt.getTime()) : rows;
-    const startIndex = popularMode && cursor ? Math.max(0, ranked.findIndex((row) => row.id === cursor) + 1) : 0;
+    const cursorIndex = popularMode && cursor ? ranked.findIndex((row) => row.id === cursor) : -1;
+    if (popularMode && cursor && cursorIndex < 0) throw new NotFoundException('Popular feed cursor expired. Refresh the feed.');
+    const startIndex = popularMode && cursor ? cursorIndex + 1 : 0;
     const selected = popularMode ? ranked.slice(startIndex, startIndex + pageSize + 1) : ranked;
     const hasMore = selected.length > pageSize;
     const data = selected.slice(0, pageSize).map(({ likes, bookmarks, reposts, views, ...post }) => ({ ...post, liked: Boolean(likes?.length), bookmarked: Boolean(bookmarks?.length), reposted: Boolean(reposts?.length), viewed: Boolean(views?.length) }));
@@ -112,12 +114,15 @@ export class PostsService {
 
   async comment(userId: string, postId: string, dto: CreateCommentDto) {
     const post = await this.assertCanInteract(userId, postId);
+    let replyRecipientId: string | null = null;
     if (dto.parentId) {
-      const parent = await this.prisma.comment.findFirst({ where: { id: dto.parentId, postId, deletedAt: null }, select: { id: true } });
+      const parent = await this.prisma.comment.findFirst({ where: { id: dto.parentId, postId, deletedAt: null }, select: { id: true, authorId: true } });
       if (!parent) throw new NotFoundException('Parent comment not found.');
+      replyRecipientId = parent.authorId;
     }
     const comment = await this.prisma.comment.create({ data: { postId, authorId: userId, content: dto.content.trim(), parentId: dto.parentId }, include: { author: { select: authorSelect } } });
-    if (post.authorId !== userId) await this.prisma.notification.create({ data: { recipientId: post.authorId, actorId: userId, type: dto.parentId ? 'REPLY' : 'COMMENT', entityId: comment.id } });
+    const recipientId = dto.parentId ? replyRecipientId : post.authorId;
+    if (recipientId && recipientId !== userId) await this.prisma.notification.create({ data: { recipientId, actorId: userId, type: dto.parentId ? 'REPLY' : 'COMMENT', entityId: comment.id } });
     return comment;
   }
 

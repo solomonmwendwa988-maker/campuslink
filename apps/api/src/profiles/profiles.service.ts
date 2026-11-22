@@ -147,7 +147,7 @@ export class ProfilesService {
     const excluded = blocked.map((row) => row.blockerId === target.id ? row.blockedId : row.blockerId);
     const rows = await this.prisma.follow.findMany({
       where: { ...relationWhere, ...(direction === 'followers' ? { followerId: { notIn: excluded } } : { followedId: { notIn: excluded } }) },
-      orderBy: [{ createdAt: 'desc' }, { followerId: 'desc' }], take: 21,
+      orderBy: direction === 'followers' ? [{ createdAt: 'desc' }, { followerId: 'desc' }] : [{ createdAt: 'desc' }, { followedId: 'desc' }], take: 21,
       ...(cursor ? { cursor: { followerId_followedId: direction === 'followers' ? { followerId: cursor, followedId: target.id } : { followerId: target.id, followedId: cursor } }, skip: 1 } : {}),
       include: { follower: { select: { id: true, username: true, profile: { select: { fullName: true, photoUrl: true } } } }, followed: { select: { id: true, username: true, profile: { select: { fullName: true, photoUrl: true } } } } },
     });

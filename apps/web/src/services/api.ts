@@ -475,6 +475,9 @@ export interface SocialPostApiRecord {
   liked?: boolean; bookmarked?: boolean; reposted?: boolean; viewed?: boolean; media?: Array<{ id: string; url: string; position: number }>;
 }
 export type SocialPage = { data: SocialPostApiRecord[]; nextCursor: string | null };
+export async function createSocialPost(content: string) { return request<SocialPostApiRecord>('/posts', { method: 'POST', authenticated: true, body: JSON.stringify({ content }) }); }
+export async function editSocialPost(postId: string, content: string) { return request<SocialPostApiRecord>(`/posts/${encodeURIComponent(postId)}`, { method: 'PATCH', authenticated: true, body: JSON.stringify({ content }) }); }
+export async function deleteSocialPost(postId: string) { return request<{ message: string }>(`/posts/${encodeURIComponent(postId)}`, { method: 'DELETE', authenticated: true }); }
 export async function getSocialFeed(options: { cursor?: string; mode?: 'latest' | 'popular'; following?: boolean } = {}) {
   const query = new URLSearchParams(); if (options.cursor) query.set('cursor', options.cursor); if (options.mode && !options.following) query.set('mode', options.mode);
   const path = options.following ? '/posts/following' : '/posts';
