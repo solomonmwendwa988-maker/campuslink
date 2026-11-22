@@ -39,7 +39,7 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
   const [muted, setMuted] = useLocalState<string[]>('muted-students', []);
   const [blockDraft, setBlockDraft] = useState('');
   const [muteDraft, setMuteDraft] = useState('');
-  const [password, setPassword] = useState({ current: '', next: '', confirm: '' });
+  const [notificationPermission, setNotificationPermission] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
   const photoInput = useRef<HTMLInputElement>(null);
   const coverInput = useRef<HTMLInputElement>(null);
   const cameraPhotoInput = useRef<HTMLInputElement>(null);
@@ -75,21 +75,33 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
   };
   const isPreferenceEnabled = (key: string) => preferences[key] ?? !key.startsWith('show');
   const toggle = (key: string) => setPreferences({ ...preferences, [key]: !isPreferenceEnabled(key) });
+  const previewNotificationSound = () => {
+    try {
+      const AudioContextCtor = window.AudioContext;
+      const context = new AudioContextCtor();
+      const oscillator = context.createOscillator(); const gain = context.createGain();
+      oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(880, context.currentTime); oscillator.frequency.exponentialRampToValueAtTime(660, context.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.0001, context.currentTime); gain.gain.exponentialRampToValueAtTime(0.06, context.currentTime + 0.015); gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
+      oscillator.connect(gain); gain.connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime + 0.19); oscillator.onended = () => void context.close();
+    } catch { /* Sound preview may be unavailable on this browser/device. */ }
+  };
+  const requestDesktopNotificationPermission = async () => {
+    if (!('Notification' in window)) { setFeedback('This browser does not support desktop notifications.'); return false; }
+    const permission = await Notification.requestPermission(); setNotificationPermission(permission);
+    if (permission === 'granted') { setPreferences({ ...preferences, desktopNotifications: true }); setFeedback('Desktop notifications enabled. They appear while CampusLink is open.'); return true; }
+    setPreferences({ ...preferences, desktopNotifications: false }); setFeedback('Notification permission was not granted.'); return false;
+  };
+  const toggleDesktopNotifications = async () => {
+    if (preferences.desktopNotifications) { setPreferences({ ...preferences, desktopNotifications: false }); setFeedback('Desktop notifications turned off.'); return; }
+    if (notificationPermission === 'granted') { setPreferences({ ...preferences, desktopNotifications: true }); setFeedback('Desktop notifications enabled.'); return; }
+    await requestDesktopNotificationPermission();
+  };
   const addName = (kind: 'blocked' | 'muted') => {
     const value = (kind === 'blocked' ? blockDraft : muteDraft).trim().replace(/^@/, '');
     if (!value) return;
     const setter = kind === 'blocked' ? setBlocked : setMuted;
     setter(current => current.some(name => name.toLowerCase() === value.toLowerCase()) ? current : [...current, value]);
     kind === 'blocked' ? setBlockDraft('') : setMuteDraft('');
-  };
-  const changePassword = (event: FormEvent) => {
-    event.preventDefault();
-    if (!password.current || password.next.length < 8 || password.next !== password.confirm) {
-      setFeedback('Enter the current password, a new password of at least 8 characters, and matching confirmation.');
-      return;
-    }
-    setPassword({ current: '', next: '', confirm: '' });
-    setFeedback('Password change is a preview only. No password was stored or changed.');
   };
   const addPhotoButtons = (kind: 'avatarImage' | 'coverImage') => {
     const input = kind === 'avatarImage' ? photoInput : coverInput;
@@ -135,15 +147,15 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
           <div className="settings-list-editor"><h3>Muted students</h3><p>Muted names are saved in this browser preview.</p><div><input value={muteDraft} onChange={event => setMuteDraft(event.target.value)} placeholder="Username"/><button type="button" onClick={() => addName('muted')}>Add</button></div>{muted.map(name => <button className="settings-chip" key={name} onClick={() => setMuted(muted.filter(item => item !== name))}>@{name} · remove</button>)}</div>
         </section>
 
-        <section className="card settings-card" id="settings-notifications"><h2><Bell size={18}/> Notifications</h2><p>Choose which activity appears in your notifications.</p>{preferencesList.slice(5).map(([key, title, detail]) => <label className="settings-toggle" key={key}><span><b>{title}</b><small>{detail}</small></span><input type="checkbox" checked={isPreferenceEnabled(key)} onChange={() => toggle(key)}/></label>)}</section>
+        <section className="card settings-card" id="settings-notifications"><h2><Bell size={18}/> Notifications</h2><p>Choose which activity appears in your notifications. Preferences save automatically on this device.</p>{preferencesList.slice(5).map(([key, title, detail]) => <label className="settings-toggle" key={key}><span><b>{title}</b><small>{detail}</small></span><input type="checkbox" checked={isPreferenceEnabled(key)} onChange={() => toggle(key)}/></label>)}<label className="settings-toggle"><span><b>Message alerts</b><small>Show notifications for new direct messages</small></span><input type="checkbox" checked={preferences.messageNotifications !== false} onChange={() => toggle('messageNotifications')}/></label><label className="settings-toggle"><span><b>Notification sound</b><small>Play a soft sound when new activity arrives in CampusLink</small></span><input type="checkbox" checked={preferences.notificationSound !== false} onChange={() => { const enabled = preferences.notificationSound === false; toggle('notificationSound'); if (enabled) previewNotificationSound(); }}/></label><label className="settings-toggle"><span><b>Desktop notifications</b><small>Browser alerts for new activity while CampusLink is open · Permission: {notificationPermission}</small></span><input type="checkbox" checked={Boolean(preferences.desktopNotifications)} onChange={() => void toggleDesktopNotifications()} disabled={notificationPermission === 'denied' || notificationPermission === 'unsupported'}/></label><p className="settings-notice">Desktop notifications are not background push notifications. Browser push requires additional server configuration.</p></section>
 
         <section className="card settings-card" id="settings-appearance"><h2><Sun size={18}/> Appearance</h2><p>Choose a theme. System follows your device preference.</p><div className="theme-choice-row">{(['light','dark','system'] as ThemeMode[]).map(mode => <button type="button" key={mode} className={themeMode === mode ? 'selected' : ''} onClick={() => setThemeMode(mode)}>{mode === 'dark' ? <Moon size={17}/> : mode === 'light' ? <Sun size={17}/> : <span className="system-theme-icon">◐</span>}{mode === 'system' ? 'System' : mode[0].toUpperCase() + mode.slice(1)}</button>)}</div></section>
 
-        <form className="card settings-card" id="settings-security" onSubmit={changePassword}><h2><LockKeyhole size={18}/> Security</h2><p>Password controls are shown for the UI preview only; there is no account server.</p><label className="settings-field">Current password<input type="password" autoComplete="current-password" value={password.current} onChange={event => setPassword({ ...password, current: event.target.value })}/></label><label className="settings-field">New password<input type="password" autoComplete="new-password" minLength={8} value={password.next} onChange={event => setPassword({ ...password, next: event.target.value })}/></label><label className="settings-field">Confirm new password<input type="password" autoComplete="new-password" value={password.confirm} onChange={event => setPassword({ ...password, confirm: event.target.value })}/></label><button type="submit" className="outline-btn">Preview password change</button><div className="settings-security-note"><Shield size={16}/> Passwords are never written to localStorage.</div></form>
+        <section className="card settings-card" id="settings-security"><h2><LockKeyhole size={18}/> Security</h2><p>Your CampusLink session is protected by account authentication.</p><div className="settings-security-note"><Shield size={16}/> Password changes are not yet available from this settings page. Use the supported account recovery flow rather than a preview form.</div></section>
 
         <section className="card settings-card" id="settings-help"><h2><CircleHelp size={18}/> Help &amp; legal</h2><a className="settings-link-row" href="mailto:support@campuslink.ke?subject=CampusLink%20support">Help center &amp; support <ChevronRight size={16}/></a><a className="settings-link-row" href="mailto:feedback@campuslink.ke?subject=CampusLink%20feedback">Send feedback <ChevronRight size={16}/></a><details className="settings-legal"><summary>Privacy policy &amp; terms <ChevronRight size={16}/></summary><p>CampusLink is currently a frontend preview for University of Kabianga. Profile, post and preference data may be saved in this browser. Do not enter sensitive information. Authentication, account deletion, email, notifications and messaging are not connected to a production service. These preview notes are not a substitute for published legal terms.</p></details><div className="settings-app-info">CampusLink · Connect. Discover. Trade. Grow. <small>University of Kabianga preview · 0.1.0</small></div></section>
 
-        <section className="card settings-card settings-account-card" id="settings-account"><h2>Account</h2><p>These actions only affect this local preview.</p><button className="outline-btn" type="button" onClick={onLogout}>Log out</button><button className="danger-button" type="button" onClick={() => { if (window.confirm('Deactivate this local preview session?')) onLogout(); }}>Deactivate preview account</button><button className="danger-button" type="button" onClick={() => { if (window.confirm('Delete/reset all CampusLink preview data stored in this browser? This cannot be undone.')) onReset(); }}><Trash2 size={14}/> Delete preview data</button></section>
+        <section className="card settings-card settings-account-card" id="settings-account"><h2>Account</h2><p>These actions only affect this local preview.</p><button className="outline-btn" type="button" onClick={onLogout}>Log out</button><button className="danger-button" type="button" onClick={() => { if (window.confirm('Delete/reset all CampusLink preview data stored in this browser? This cannot be undone.')) onReset(); }}><Trash2 size={14}/> Delete preview data</button></section>
       </div>
     </div>
   </>;
