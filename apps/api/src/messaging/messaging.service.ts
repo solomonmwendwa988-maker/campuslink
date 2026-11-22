@@ -42,7 +42,7 @@ export class MessagingService {
     const blockedRows = await this.prisma.block.findMany({ where: { OR: [{ blockerId: userId, blockedId: { in: [...allowed] } }, { blockedId: userId, blockerId: { in: [...allowed] } }] }, select: { blockerId: true, blockedId: true } });
     const blocked = new Set(blockedRows.map(row => row.blockerId === userId ? row.blockedId : row.blockerId));
     const visible = [...allowed].filter(id => !blocked.has(id));
-    const rows = visible.length ? await this.prisma.messagingPresence.findMany({ where: { userId: { in: visible }, lastSeenAt: { gt: new Date(Date.now() - 90_000) } }, select: { userId: true, lastSeenAt: true } }) : [];
+    const rows = visible.length ? await this.prisma.messagingPresence.findMany({ where: { userId: { in: visible }, lastSeenAt: { gt: new Date(Date.now() - 60_000) } }, select: { userId: true, lastSeenAt: true } }) : [];
     const active = new Map(rows.map(row => [row.userId, row.lastSeenAt]));
     return { data: visible.map(id => ({ userId: id, online: active.has(id), lastSeenAt: active.get(id)?.toISOString() ?? null })) };
   }

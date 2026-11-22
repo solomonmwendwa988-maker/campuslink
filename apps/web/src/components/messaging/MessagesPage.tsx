@@ -121,7 +121,7 @@ export function MessagesPage({ initialUsername, onInitialHandled }: { initialUse
     if (!ids.length) { setOnlineUsers(new Set()); return; }
     let cancelled = false;
     const poll = () => { if (document.visibilityState !== 'visible') return; void getPresence(ids).then(result => { if (!cancelled) setOnlineUsers(new Set(result.data.filter(status => status.online).map(status => status.userId))); }).catch(() => undefined); };
-    poll(); const timer = window.setInterval(poll, 15000); return () => { cancelled = true; window.clearInterval(timer); };
+    poll(); const timer = window.setInterval(poll, 5000); return () => { cancelled = true; window.clearInterval(timer); };
   }, [conversations]);
   // Acknowledge read status only when the conversation selection changes (explicit open).
   useEffect(() => {
