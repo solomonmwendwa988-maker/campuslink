@@ -4,6 +4,7 @@ import { Avatar } from '../shared/Avatar';
 import { ApiConversation, ApiMessage, listConversations, getConversationMessages, sendConversationMessage, markConversationRead, startConversation, sendVoiceMessage, blockUser, reportUser, muteConversation, unmuteConversation, getPresence, setConversationTyping, getConversationTyping } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { pathForProfile } from '../../app/router/routes';
+import { ConfirmDialog, ReportDialog } from '../shared/ConfirmDialog';
 
 
 
@@ -84,6 +85,10 @@ export function MessagesPage({ cacheScope = 'anonymous', initialUsername, onInit
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
   const [recording, setRecording] = useState(false);
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
   const [voicePreviewUrl, setVoicePreviewUrl] = useState<string | null>(null);
@@ -285,8 +290,10 @@ export function MessagesPage({ cacheScope = 'anonymous', initialUsername, onInit
 
   const openContactProfile = () => { if (contact?.username) navigate(pathForProfile(contact.username)); };
   const toggleMute = async () => { if (!selectedId) return; try { if (muted) await unmuteConversation(selectedId); else await muteConversation(selectedId); await refreshConversations(true); setContactMenuOpen(false); } catch (err) { setError(err instanceof Error ? err.message : 'Could not update conversation mute setting.'); } };
-  const handleBlock = async () => { if (!contact?.id || !window.confirm(`Block @${contact.username}? They will no longer be able to message you.`)) return; try { await blockUser(contact.id); setContactMenuOpen(false); setSelectedId(null); setMobileChatOpen(false); await refreshConversations(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not block this user.'); } };
-  const handleReport = async () => { if (!contact?.id) return; const details = window.prompt('Tell us what happened (optional).'); if (details === null) return; try { await reportUser(contact.id, 'OTHER', details.trim() || undefined); setContactMenuOpen(false); setError('Report submitted for review.'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not submit report.'); } };
+  const handleBlock = () => { if (contact?.id) setBlockDialogOpen(true); };
+  const confirmBlock = async () => { if (!contact?.id) return; setBlockBusy(true); try { await blockUser(contact.id); setBlockDialogOpen(false); setContactMenuOpen(false); setSelectedId(null); setMobileChatOpen(false); await refreshConversations(); } catch (err) { setError(err instanceof Error ? err.message : 'Could not block this user.'); } finally { setBlockBusy(false); } };
+  const handleReport = () => { if (contact?.id) setReportDialogOpen(true); };
+  const submitReport = async (details: string) => { if (!contact?.id) return; setReportBusy(true); try { await reportUser(contact.id, 'OTHER', details || undefined); setReportDialogOpen(false); setContactMenuOpen(false); setError('Report submitted for review. Thank you for helping keep CampusLink safe.'); } catch (err) { setError(err instanceof Error ? err.message : 'Could not submit this report.'); } finally { setReportBusy(false); } };
   const beginVoiceRecording = async () => { if (recording || voiceSending) return; if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { setError('Voice recording is not supported in this browser.'); return; } try { const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); streamRef.current = stream; voiceChunksRef.current = []; const mime = ['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(type => MediaRecorder.isTypeSupported(type)); const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); recorderRef.current = recorder; recorder.ondataavailable = event => { if (event.data.size) voiceChunksRef.current.push(event.data); }; recorder.onstop = () => { const blob = new Blob(voiceChunksRef.current, { type: recorder.mimeType || 'audio/webm' }); if (blob.size) { setVoiceBlob(blob); const url = URL.createObjectURL(blob); setVoicePreviewUrl(url); } stream.getTracks().forEach(track => track.stop()); streamRef.current = null; setRecording(false); if (recordTimerRef.current) window.clearInterval(recordTimerRef.current); recordTimerRef.current = null; }; recorder.start(500); setRecording(true); setRecordSeconds(0); recordTimerRef.current = window.setInterval(() => setRecordSeconds(seconds => { if (seconds >= 119) { recorderRef.current?.stop(); return 120; } return seconds + 1; }), 1000); } catch { setError('Microphone access was denied or unavailable. Allow microphone permission and try again.'); } };
   const stopVoiceRecording = () => { if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop(); };
   const cancelVoiceRecording = () => { if (recorderRef.current && recorderRef.current.state !== 'inactive') { recorderRef.current.ondataavailable = null; recorderRef.current.onstop = null; recorderRef.current.stop(); } streamRef.current?.getTracks().forEach(track => track.stop()); streamRef.current = null; setRecording(false); setVoiceBlob(null); if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl); setVoicePreviewUrl(null); if (recordTimerRef.current) window.clearInterval(recordTimerRef.current); recordTimerRef.current = null; };
@@ -322,5 +329,7 @@ export function MessagesPage({ cacheScope = 'anonymous', initialUsername, onInit
         <form className="chat-send ig-chat-send" onSubmit={submitMessage}>{voiceBlob&&voicePreviewUrl?<div className="voice-preview"><audio controls src={voicePreviewUrl}/><span>{formatDuration(recordSeconds)}</span><button type="button" onClick={cancelVoiceRecording} aria-label="Discard recording"><X size={16}/></button><button type="button" onClick={sendVoice} disabled={voiceSending}>{voiceSending?'Uploading…':'Send voice'}</button></div>:recording?<div className="voice-recording-controls"><span className="recording-dot"/><b>{formatDuration(recordSeconds)}</b><span>Recording voice message</span><button type="button" onClick={cancelVoiceRecording} aria-label="Cancel recording"><X size={17}/></button><button type="button" onClick={stopVoiceRecording} aria-label="Stop recording"><Square size={16}/></button></div>:<><input value={draft} onChange={event => handleDraftChange(event.target.value)} placeholder="Message…" aria-label="Write a message" autoComplete="off"/><button type="button" className="voice-record-button" onClick={beginVoiceRecording} aria-label="Record voice message"><Mic size={17}/></button><button type="submit" aria-label="Send message" disabled={!draft.trim() || sending}>{sending ? "Sending…" : <Send size={17}/>}</button></>}</form>
       </>}
     </section>
+    <ConfirmDialog open={blockDialogOpen} title={`Block @${contact?.username ?? 'this student'}?`} description="They will no longer be able to interact with you as usual. Your follow connections will be removed. You can unblock them later from Settings." confirmLabel="Block account" tone="danger" busy={blockBusy} onCancel={()=>setBlockDialogOpen(false)} onConfirm={confirmBlock}/>
+    <ReportDialog open={reportDialogOpen} username={contact?.username ?? 'student'} busy={reportBusy} onSubmit={submitReport} onCancel={()=>setReportDialogOpen(false)}/>
   </div>;
 }

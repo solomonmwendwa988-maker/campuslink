@@ -12,7 +12,9 @@ export class NotificationsService {
     const messageConversations = messageEntityIds.length ? await this.prisma.message.findMany({ where: { id: { in: messageEntityIds } }, select: { id: true, conversationId: true } }) : [];
     const mutedConversationIds = messageConversations.length ? new Set((await this.prisma.conversationMute.findMany({ where: { userId, conversationId: { in: [...new Set(messageConversations.map(message => message.conversationId))] } }, select: { conversationId: true } })).map(row => row.conversationId)) : new Set<string>();
     const mutedMessageIds = new Set(messageConversations.filter(message => mutedConversationIds.has(message.conversationId)).map(message => message.id));
-    const data = pageRows.filter(row => !(row.type === 'MESSAGE' && row.entityId && mutedMessageIds.has(row.entityId)));
+    const accountMuteRows = await this.prisma.accountMute.findMany({ where: { userId }, select: { mutedUserId: true } });
+    const mutedActorIds = new Set(accountMuteRows.map(row => row.mutedUserId));
+    const data = pageRows.filter(row => !(row.type === 'MESSAGE' && row.entityId && mutedMessageIds.has(row.entityId)) && !(row.actorId && mutedActorIds.has(row.actorId)));
     const actorIds = [...new Set(data.map((row) => row.actorId).filter((id): id is string => Boolean(id)))];
     const actors = await this.prisma.user.findMany({ where: { id: { in: actorIds }, deletedAt: null }, select: { id: true, username: true, profile: { select: { fullName: true, photoUrl: true } } } });
     const actorById = new Map(actors.map((actor) => [actor.id, actor]));

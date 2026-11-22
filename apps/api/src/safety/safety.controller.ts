@@ -12,6 +12,9 @@ type RequestWithUser = Request & { user?: { id: string } };
 export class SafetyController {
   constructor(@Inject(SafetyService) private readonly safety: SafetyService) {}
   @Get('blocked') blocked(@Req() req: RequestWithUser) { return this.safety.blockedUsers(req.user!.id); }
+  @Get('muted') muted(@Req() req: RequestWithUser) { return this.safety.mutedUsers(req.user!.id); }
+  @Post('mute') mute(@Req() req: RequestWithUser, @Body() dto: BlockDto) { return this.safety.mute(req.user!.id, dto.userId); }
+  @Delete('mute/:userId') unmute(@Req() req: RequestWithUser, @Param('userId', ParseUUIDPipe) userId: string) { return this.safety.unmute(req.user!.id, userId); }
   @Post('block') block(@Req() req: RequestWithUser, @Body() dto: BlockDto) { return this.safety.block(req.user!.id, dto.userId); }
   @Delete('block/:userId') unblock(@Req() req: RequestWithUser, @Param('userId', ParseUUIDPipe) userId: string) { return this.safety.unblock(req.user!.id, userId); }
   @Post('reports') report(@Req() req: RequestWithUser, @Body() dto: ReportDto) { return this.safety.report(req.user!.id, dto); }

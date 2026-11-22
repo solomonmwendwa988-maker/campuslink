@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, ReportStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ReportDto } from './safety.dto.js';
@@ -16,6 +16,24 @@ export class SafetyService {
       await tx.follow.deleteMany({ where: { OR: [{ followerId: blockerId, followedId: blockedId }, { followerId: blockedId, followedId: blockerId }] } });
     });
     return { blocked: true };
+  }
+
+  async mute(userId: string, mutedUserId: string) {
+    if (userId === mutedUserId) throw new BadRequestException('You cannot mute your own account.');
+    const target = await this.prisma.user.findFirst({ where: { id: mutedUserId, deletedAt: null }, select: { id: true } });
+    if (!target) throw new NotFoundException('Student not found.');
+    await this.prisma.accountMute.upsert({ where: { userId_mutedUserId: { userId, mutedUserId } }, update: {}, create: { userId, mutedUserId } });
+    return { muted: true };
+  }
+
+  async unmute(userId: string, mutedUserId: string) {
+    await this.prisma.accountMute.deleteMany({ where: { userId, mutedUserId } });
+    return { muted: false };
+  }
+
+  async mutedUsers(userId: string) {
+    const rows = await this.prisma.accountMute.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, include: { mutedUser: { select: { id: true, username: true, profile: { select: { fullName: true, photoUrl: true } } } } } });
+    return { data: rows.map(({ mutedUser, createdAt }) => ({ ...mutedUser, mutedAt: createdAt })) };
   }
 
   async unblock(blockerId: string, blockedId: string) {

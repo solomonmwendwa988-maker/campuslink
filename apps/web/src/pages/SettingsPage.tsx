@@ -1,11 +1,11 @@
-import { FormEvent, useRef, useState } from 'react';
-import { Bell, Camera, Check, ChevronRight, CircleHelp, LockKeyhole, Moon, Shield, Sun, Trash2, Upload, UserRound } from 'lucide-react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
+import { Bell, Camera, Check, ChevronRight, CircleHelp, LockKeyhole, Moon, Shield, Sun, Trash2, Upload, UserRound, Search, VolumeX, RefreshCw, X } from 'lucide-react';
 import { StudentProfile } from './CorePages';
-import { useLocalState } from '../hooks/useLocalState';
 import { launchUniversity } from '../data/universities';
 import { useTheme } from '../app/providers/ThemeProvider';
 import { optimizeImage } from '../services/imageProcessing';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
+import { getBlockedUsers, getMutedUsers, unblockUser, unmuteAccount, getSessions, revokeSession, changePassword, type SafetyAccount } from '../services/api';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 type SettingsProps = {
@@ -31,16 +31,54 @@ const preferencesList = [
   ['Events', 'Events', 'Get notified about campus events'],
 ];
 
+function AccountSafetyPanel() {
+  const [tab, setTab] = useState<'blocked' | 'muted'>('blocked');
+  const [blocked, setBlocked] = useState<SafetyAccount[]>([]);
+  const [muted, setMuted] = useState<SafetyAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+  const [confirm, setConfirm] = useState<{ type: 'unblock' | 'unmute'; account: SafetyAccount } | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const load = async () => {
+    setLoading(true); setError('');
+    try { const [blockedResult, mutedResult] = await Promise.all([getBlockedUsers(), getMutedUsers()]); setBlocked(blockedResult.data ?? []); setMuted(mutedResult.data ?? []); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Unable to load account controls.'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { void load(); }, []);
+  const list = tab === 'blocked' ? blocked : muted;
+  const filtered = list.filter(account => { const q = query.trim().toLowerCase(); return !q || account.username.toLowerCase().includes(q) || (account.profile?.fullName ?? '').toLowerCase().includes(q); });
+  const confirmAction = async () => { if (!confirm) return; setActionBusy(true); setBusyId(confirm.account.id); try { if (confirm.type === 'unblock') await unblockUser(confirm.account.id); else await unmuteAccount(confirm.account.id); setConfirm(null); await load(); } catch (e) { setError(e instanceof Error ? e.message : 'The action could not be completed.'); } finally { setActionBusy(false); setBusyId(null); } };
+  return <section className="settings-safety-panel" aria-label="Blocked and muted account management">
+    <div className="settings-safety-head"><div className="settings-safety-icon"><Shield size={21}/></div><div><h3>Account boundaries</h3><p>Control whose content and interactions you want to see on CampusLink.</p></div></div>
+    <div className="settings-safety-tabs" role="tablist" aria-label="Account controls"><button type="button" role="tab" aria-selected={tab==='blocked'} className={tab==='blocked'?'active':''} onClick={()=>{setTab('blocked');setQuery('')}}><Shield size={16}/> Blocked <span>{blocked.length}</span></button><button type="button" role="tab" aria-selected={tab==='muted'} className={tab==='muted'?'active':''} onClick={()=>{setTab('muted');setQuery('')}}><VolumeX size={16}/> Muted <span>{muted.length}</span></button></div>
+    <label className="settings-safety-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={`Search ${tab} accounts`} aria-label={`Search ${tab} accounts`}/>{query&&<button type="button" aria-label="Clear search" onClick={()=>setQuery('')}><X size={15}/></button>}</label>
+    {error&&<div className="settings-safety-error" role="alert"><span>{error}</span><button type="button" onClick={()=>void load()}><RefreshCw size={14}/>Retry</button></div>}
+    {loading?<div className="settings-safety-loading"><span className="settings-safety-spinner"/>Loading account controls…</div>:filtered.length===0?<div className="settings-safety-empty"><div className="settings-safety-empty-icon">{tab==='blocked'?<Shield size={22}/>:<VolumeX size={22}/>}</div><strong>{query?`No ${tab} accounts match your search`:`No ${tab} accounts`}</strong><p>{query?'Try a different name or username.':tab==='blocked'?'Accounts you block will appear here. Blocking prevents interaction and removes follow connections.':'Accounts you mute will appear here. Muting helps curate your feed without blocking someone.'}</p>{query&&<button type="button" className="settings-safety-clear" onClick={()=>setQuery('')}>Clear search</button>}</div>:<div className="settings-safety-list">{filtered.map(account=><article className="settings-safety-user" key={account.id}><div className="settings-safety-avatar">{account.profile?.photoUrl?<img src={account.profile.photoUrl} alt=""/>:<UserRound size={19}/>}</div><div className="settings-safety-user-copy"><strong>{account.profile?.fullName || account.username}</strong><span>@{account.username}</span><small>{tab==='blocked'?'Blocked account':'Muted account'}</small></div><button className={tab==='blocked'?'settings-safety-action unblock':'settings-safety-action unmute'} type="button" disabled={busyId===account.id} onClick={()=>setConfirm({type:tab==='blocked'?'unblock':'unmute',account})}>{tab==='blocked'?<UserRound size={15}/>:<VolumeX size={15}/>}<span>{busyId===account.id?'Working…':tab==='blocked'?'Unblock':'Unmute'}</span></button></article>)}</div>}
+    <div className="settings-safety-foot"><span>Changes are saved to your account.</span><button type="button" onClick={()=>void load()} disabled={loading}><RefreshCw size={14}/>Refresh</button></div>
+    <ConfirmDialog open={Boolean(confirm)} title={confirm?.type==='unblock'?'Unblock this account?':'Unmute this account?'} description={confirm?.type==='unblock'?`@${confirm?.account.username} can interact with you again, subject to your privacy settings.`:`@${confirm?.account.username}'s content and activity can appear again.`} confirmLabel={confirm?.type==='unblock'?'Unblock account':'Unmute account'} tone="primary" busy={actionBusy} onCancel={()=>setConfirm(null)} onConfirm={confirmAction}/>
+  </section>;
+}
+
+type SecuritySession = { id: string; createdAt: string; expiresAt: string; userAgent?: string | null };
+function AccountSecurityPanel() {
+  const [sessions, setSessions] = useState<SecuritySession[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [revokeTarget, setRevokeTarget] = useState<SecuritySession|null>(null); const [revokeBusy, setRevokeBusy] = useState(false); const [pw, setPw] = useState({ current: '', next: '', confirm: '' }); const [pwBusy, setPwBusy] = useState(false); const [pwMessage, setPwMessage] = useState('');
+  const load = async () => { setLoading(true); setError(''); try { const result = await getSessions() as { data: SecuritySession[] }; setSessions(result.data ?? []); } catch (e) { setError(e instanceof Error ? e.message : 'Unable to load sessions.'); } finally { setLoading(false); } };
+  useEffect(() => { void load(); }, []);
+  const submitPassword = async (event: FormEvent) => { event.preventDefault(); setPwMessage(''); if (pw.next.length < 8) { setPwMessage('New password must be at least 8 characters.'); return; } if (pw.next !== pw.confirm) { setPwMessage('New passwords do not match.'); return; } setPwBusy(true); try { await changePassword({ currentPassword: pw.current, newPassword: pw.next }); setPw({ current: '', next: '', confirm: '' }); setPwMessage('Password changed. All active sessions were revoked—please sign in again.'); } catch (e) { setPwMessage(e instanceof Error ? e.message : 'Password change failed.'); } finally { setPwBusy(false); } };
+  const revoke = async () => { if (!revokeTarget) return; setRevokeBusy(true); try { await revokeSession(revokeTarget.id); setRevokeTarget(null); await load(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not revoke session.'); } finally { setRevokeBusy(false); } };
+  const deviceLabel = (agent?: string|null) => { if (!agent) return 'Unknown device'; if (/android/i.test(agent)) return 'Android device'; if (/iphone|ipad/i.test(agent)) return 'Apple mobile device'; if (/windows/i.test(agent)) return 'Windows device'; if (/mac/i.test(agent)) return 'Mac device'; if (/linux/i.test(agent)) return 'Linux device'; return agent.slice(0,110); };
+  return <div className="settings-security-upgrade"><form className="settings-password-form" onSubmit={submitPassword}><h3>Change password</h3><p>Use a unique password that you do not reuse on other sites.</p><label>Current password<input type="password" autoComplete="current-password" value={pw.current} onChange={e=>setPw({...pw,current:e.target.value})} required/></label><label>New password<input type="password" autoComplete="new-password" value={pw.next} onChange={e=>setPw({...pw,next:e.target.value})} minLength={8} required/></label><label>Confirm new password<input type="password" autoComplete="new-password" value={pw.confirm} onChange={e=>setPw({...pw,confirm:e.target.value})} minLength={8} required/></label><button className="primary-btn small" type="submit" disabled={pwBusy}>{pwBusy?'Updating…':'Update password'}</button>{pwMessage&&<p className="settings-security-feedback" role="status">{pwMessage}</p>}</form><div className="settings-session-panel"><div className="settings-session-head"><div><h3>Active sessions</h3><p>Revoke access from devices you no longer use.</p></div><button type="button" onClick={()=>void load()} disabled={loading} aria-label="Refresh sessions"><RefreshCw size={15}/></button></div>{error&&<p className="settings-safety-error-text">{error}</p>}{loading?<div className="settings-safety-loading"><span className="settings-safety-spinner"/>Loading sessions…</div>:sessions.length===0?<div className="settings-safety-empty"><strong>No active sessions found</strong><p>Sign-in sessions will appear here when available.</p></div>:<div className="settings-session-list">{sessions.map(session=><article className="settings-session-item" key={session.id}><div className="settings-session-device"><LockKeyhole size={17}/></div><div className="settings-session-copy"><strong>{deviceLabel(session.userAgent)}</strong><small>Started {new Date(session.createdAt).toLocaleString()}</small><small>Expires {new Date(session.expiresAt).toLocaleDateString()}</small></div><button type="button" onClick={()=>setRevokeTarget(session)} className="settings-session-revoke">Revoke</button></article>)}</div>}</div><ConfirmDialog open={Boolean(revokeTarget)} title="Revoke this session?" description="This device will need to sign in again before it can access your CampusLink account." confirmLabel="Revoke session" tone="danger" busy={revokeBusy} onCancel={()=>setRevokeTarget(null)} onConfirm={revoke}/></div>;
+}
+
 export function SettingsPage({ profile, onSaveProfile, preferences, setPreferences, onLogout, onReset }: SettingsProps) {
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const [draft, setDraft] = useState(profile);
   const [saved, setSaved] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
-  const [blocked, setBlocked] = useLocalState<string[]>('blocked-students', []);
-  const [muted, setMuted] = useLocalState<string[]>('muted-students', []);
-  const [blockDraft, setBlockDraft] = useState('');
-  const [muteDraft, setMuteDraft] = useState('');
   const [notificationPermission, setNotificationPermission] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
   const photoInput = useRef<HTMLInputElement>(null);
   const coverInput = useRef<HTMLInputElement>(null);
@@ -98,13 +136,6 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
     if (notificationPermission === 'granted') { setPreferences({ ...preferences, desktopNotifications: true }); setFeedback('Desktop notifications enabled.'); return; }
     await requestDesktopNotificationPermission();
   };
-  const addName = (kind: 'blocked' | 'muted') => {
-    const value = (kind === 'blocked' ? blockDraft : muteDraft).trim().replace(/^@/, '');
-    if (!value) return;
-    const setter = kind === 'blocked' ? setBlocked : setMuted;
-    setter(current => current.some(name => name.toLowerCase() === value.toLowerCase()) ? current : [...current, value]);
-    kind === 'blocked' ? setBlockDraft('') : setMuteDraft('');
-  };
   const addPhotoButtons = (kind: 'avatarImage' | 'coverImage') => {
     const input = kind === 'avatarImage' ? photoInput : coverInput;
     const cameraInput = kind === 'avatarImage' ? cameraPhotoInput : cameraCoverInput;
@@ -145,15 +176,14 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
         <section className="card settings-card" id="settings-privacy"><h2><Shield size={18}/> Privacy &amp; messages</h2><p>Choose what appears publicly and who can contact you.</p>
           <label className="settings-toggle"><span><b>Profile visibility</b><small>Make your profile visible to campus students</small></span><select value={draft.visibility} onChange={event => { const next = { ...draft, visibility: event.target.value as StudentProfile['visibility'] }; setDraft(next); void Promise.resolve(onSaveProfile(next)).then(() => setFeedback('Privacy setting saved.')).catch(error => setFeedback(error instanceof Error ? error.message : 'Could not save privacy setting.')); }}><option>Public</option><option>Private</option></select></label>
           {preferencesList.slice(0, 5).map(([key, title, detail]) => <label className="settings-toggle" key={key}><span><b>{title}</b><small>{detail}</small></span><input type="checkbox" checked={isPreferenceEnabled(key)} onChange={() => toggle(key)}/></label>)}
-          <div className="settings-list-editor"><h3>Blocked students</h3><p>Blocked names are stored locally; blocking is not enforced by a server.</p><div><input value={blockDraft} onChange={event => setBlockDraft(event.target.value)} placeholder="Username"/><button type="button" onClick={() => addName('blocked')}>Add</button></div>{blocked.map(name => <button className="settings-chip" key={name} onClick={() => setBlocked(blocked.filter(item => item !== name))}>@{name} · remove</button>)}</div>
-          <div className="settings-list-editor"><h3>Muted students</h3><p>Muted names are saved in this browser preview.</p><div><input value={muteDraft} onChange={event => setMuteDraft(event.target.value)} placeholder="Username"/><button type="button" onClick={() => addName('muted')}>Add</button></div>{muted.map(name => <button className="settings-chip" key={name} onClick={() => setMuted(muted.filter(item => item !== name))}>@{name} · remove</button>)}</div>
+          <AccountSafetyPanel/>
         </section>
 
         <section className="card settings-card" id="settings-notifications"><h2><Bell size={18}/> Notifications</h2><p>Choose which activity appears in your notifications. Preferences save automatically on this device.</p>{preferencesList.slice(5).map(([key, title, detail]) => <label className="settings-toggle" key={key}><span><b>{title}</b><small>{detail}</small></span><input type="checkbox" checked={isPreferenceEnabled(key)} onChange={() => toggle(key)}/></label>)}<label className="settings-toggle"><span><b>Message alerts</b><small>Show notifications for new direct messages</small></span><input type="checkbox" checked={preferences.messageNotifications !== false} onChange={() => toggle('messageNotifications')}/></label><label className="settings-toggle"><span><b>Notification sound</b><small>Play a soft sound when new activity arrives in CampusLink</small></span><input type="checkbox" checked={preferences.notificationSound !== false} onChange={() => { const enabled = preferences.notificationSound === false; toggle('notificationSound'); if (enabled) previewNotificationSound(); }}/></label><label className="settings-toggle"><span><b>Desktop notifications</b><small>Browser alerts for new activity while CampusLink is open · Permission: {notificationPermission}</small></span><input type="checkbox" checked={Boolean(preferences.desktopNotifications)} onChange={() => void toggleDesktopNotifications()} disabled={notificationPermission === 'denied' || notificationPermission === 'unsupported'}/></label><p className="settings-notice">Desktop notifications are not background push notifications. Browser push requires additional server configuration.</p></section>
 
         <section className="card settings-card" id="settings-appearance"><h2><Sun size={18}/> Appearance</h2><p>Choose a theme. System follows your device preference.</p><div className="theme-choice-row">{(['light','dark','system'] as ThemeMode[]).map(mode => <button type="button" key={mode} className={themeMode === mode ? 'selected' : ''} onClick={() => setThemeMode(mode)}>{mode === 'dark' ? <Moon size={17}/> : mode === 'light' ? <Sun size={17}/> : <span className="system-theme-icon">◐</span>}{mode === 'system' ? 'System' : mode[0].toUpperCase() + mode.slice(1)}</button>)}</div></section>
 
-        <section className="card settings-card" id="settings-security"><h2><LockKeyhole size={18}/> Security</h2><p>Your CampusLink session is protected by account authentication.</p><div className="settings-security-note"><Shield size={16}/> Password changes are not yet available from this settings page. Use the supported account recovery flow rather than a preview form.</div></section>
+        <section className="card settings-card" id="settings-security"><h2><LockKeyhole size={18}/> Security &amp; sessions</h2><p>Protect your account, update your password, and review signed-in devices.</p><AccountSecurityPanel/></section>
 
         <section className="card settings-card" id="settings-help"><h2><CircleHelp size={18}/> Help &amp; legal</h2><a className="settings-link-row" href="mailto:support@campuslink.ke?subject=CampusLink%20support">Help center &amp; support <ChevronRight size={16}/></a><a className="settings-link-row" href="mailto:feedback@campuslink.ke?subject=CampusLink%20feedback">Send feedback <ChevronRight size={16}/></a><details className="settings-legal"><summary>Privacy policy &amp; terms <ChevronRight size={16}/></summary><p>CampusLink is currently a frontend preview for University of Kabianga. Profile, post and preference data may be saved in this browser. Do not enter sensitive information. Authentication, account deletion, email, notifications and messaging are not connected to a production service. These preview notes are not a substitute for published legal terms.</p></details><div className="settings-app-info">CampusLink · Connect. Discover. Trade. Grow. <small>University of Kabianga preview · 0.1.0</small></div></section>
 
@@ -163,3 +193,5 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
     <ConfirmDialog open={resetDialogOpen} title="Delete local preview data?" description="This removes CampusLink preview data saved in this browser. This action cannot be undone." confirmLabel="Delete data" tone="danger" onCancel={() => setResetDialogOpen(false)} onConfirm={() => { setResetDialogOpen(false); onReset(); }}/>
   </>;
 }
+
+

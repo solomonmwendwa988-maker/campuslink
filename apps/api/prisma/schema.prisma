@@ -82,6 +82,8 @@ model User {
   followedBy         Follow[]      @relation("followed")
   memberships        ConversationParticipant[]
   conversationMutes ConversationMute[]
+  accountMutesMade AccountMute[] @relation("accountMuteOwner")
+  accountMutesReceived AccountMute[] @relation("accountMutedTarget")
   messages           Message[]
   messageReactions   MessageReaction[]
   listings           Listing[]
@@ -260,6 +262,16 @@ model ConversationParticipant {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@id([conversationId, userId])
   @@index([userId, lastReadAt])
+}
+
+model AccountMute {
+  userId String @db.Uuid
+  mutedUserId String @db.Uuid
+  createdAt DateTime @default(now())
+  user User @relation("accountMuteOwner", fields: [userId], references: [id], onDelete: Cascade)
+  mutedUser User @relation("accountMutedTarget", fields: [mutedUserId], references: [id], onDelete: Cascade)
+  @@id([userId, mutedUserId])
+  @@index([mutedUserId])
 }
 
 model ConversationMute {

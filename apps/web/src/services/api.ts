@@ -336,6 +336,13 @@ export async function sendVoiceMessage(conversationId: string, audio: Blob, clie
 export async function blockUser(userId: string) {
   return request<{ blocked: boolean }>('/safety/block', { method: 'POST', authenticated: true, body: JSON.stringify({ userId }) });
 }
+
+export interface SafetyAccount { id: string; username: string; profile?: { fullName?: string | null; photoUrl?: string | null } | null; blockedAt?: string; mutedAt?: string; }
+export async function getBlockedUsers() { return request<{ data: SafetyAccount[] }>('/safety/blocked', { authenticated: true }); }
+export async function unblockUser(userId: string) { return request<{ blocked: boolean }>(`/safety/block/${encodeURIComponent(userId)}`, { method: 'DELETE', authenticated: true }); }
+export async function getMutedUsers() { return request<{ data: SafetyAccount[] }>('/safety/muted', { authenticated: true }); }
+export async function muteAccount(userId: string) { return request<{ muted: boolean }>('/safety/mute', { method: 'POST', authenticated: true, body: JSON.stringify({ userId }) }); }
+export async function unmuteAccount(userId: string) { return request<{ muted: boolean }>(`/safety/mute/${encodeURIComponent(userId)}`, { method: 'DELETE', authenticated: true }); }
 export async function reportUser(userId: string, reason: 'SPAM'|'HARASSMENT'|'INAPPROPRIATE'|'FRAUD'|'OTHER', details?: string) {
   return request<{ report: { id: string; targetType: string; status: string } }>('/safety/reports', { method: 'POST', authenticated: true, body: JSON.stringify({ targetType: 'USER', targetId: userId, reason, details }) });
 }
