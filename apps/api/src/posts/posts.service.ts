@@ -10,21 +10,53 @@ const pageSize = 20;
 export class PostsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async feed(viewerId: string | undefined, cursor?: string, following = false) {
+  async feed(viewerId: string | undefined, cursor?: string, following = false, mode: 'latest' | 'popular' = 'latest') {
     if (following && !viewerId) throw new UnauthorizedException('Sign in to view your following feed.');
     const blockedByViewer = viewerId ? await this.prisma.block.findMany({ where: { blockerId: viewerId }, select: { blockedId: true } }) : [];
     const blockedViewer = viewerId ? await this.prisma.block.findMany({ where: { blockedId: viewerId }, select: { blockerId: true } }) : [];
-    const excluded = [...blockedByViewer.map((entry) => entry.blockedId), ...blockedViewer.map((entry) => entry.blockerId)];
+    const mutedRows = viewerId ? await this.prisma.accountMute.findMany({ where: { userId: viewerId }, select: { mutedUserId: true } }) : [];
+    const excluded = [...blockedByViewer.map((entry) => entry.blockedId), ...blockedViewer.map((entry) => entry.blockerId), ...mutedRows.map((entry) => entry.mutedUserId)];
     const followingIds = following && viewerId ? [viewerId, ...(await this.prisma.follow.findMany({ where: { followerId: viewerId }, select: { followedId: true } })).map((entry) => entry.followedId)] : undefined;
-    const posts = await this.prisma.post.findMany({
+    const popularMode = mode === 'popular' && !following;
+    // Popular ranking is intentionally bounded to the latest 200 eligible posts. This keeps
+    // ranking predictable and avoids an unbounded aggregate scan until a dedicated ranking store exists.
+    const rows = await this.prisma.post.findMany({
       where: { deletedAt: null, author: { deletedAt: null, deactivatedAt: null, profile: { university: { slug: 'university-of-kabianga' } } }, AND: [{ authorId: { notIn: excluded } }, ...(followingIds ? [{ authorId: { in: followingIds } }] : [])] },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: pageSize + 1, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true, reposts: true, views: true } }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } }, bookmarks: { where: { userId: viewerId }, select: { userId: true } }, views: { where: { userId: viewerId }, select: { userId: true } } } : {}) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: popularMode ? 200 : pageSize + 1, ...(cursor && !popularMode ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true, reposts: true, views: true } }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } }, bookmarks: { where: { userId: viewerId }, select: { userId: true } }, reposts: { where: { userId: viewerId }, select: { userId: true } }, views: { where: { userId: viewerId }, select: { userId: true } } } : {}) },
     });
-    const hasMore = posts.length > pageSize;
-    const data = posts.slice(0, pageSize).map(({ likes, bookmarks, views, ...post }) => ({ ...post, liked: Boolean(likes?.length), bookmarked: Boolean(bookmarks?.length), viewed: Boolean(views?.length) }));
+    const ranked = popularMode ? rows.sort((a, b) => (b._count.likes + b._count.comments * 2 + b._count.reposts * 3) - (a._count.likes + a._count.comments * 2 + a._count.reposts * 3) || b.createdAt.getTime() - a.createdAt.getTime()) : rows;
+    const startIndex = popularMode && cursor ? Math.max(0, ranked.findIndex((row) => row.id === cursor) + 1) : 0;
+    const selected = popularMode ? ranked.slice(startIndex, startIndex + pageSize + 1) : ranked;
+    const hasMore = selected.length > pageSize;
+    const data = selected.slice(0, pageSize).map(({ likes, bookmarks, reposts, views, ...post }) => ({ ...post, liked: Boolean(likes?.length), bookmarked: Boolean(bookmarks?.length), reposted: Boolean(reposts?.length), viewed: Boolean(views?.length) }));
     return { data, nextCursor: hasMore ? data.at(-1)?.id ?? null : null };
   }
+
+  async saved(userId: string, cursor?: string) {
+    const rows = await this.prisma.bookmark.findMany({
+      where: { userId, post: { deletedAt: null, author: { deletedAt: null, deactivatedAt: null } } },
+      orderBy: [{ createdAt: 'desc' }, { postId: 'desc' }], take: pageSize + 1,
+      ...(cursor ? { cursor: { userId_postId: { userId, postId: cursor } }, skip: 1 } : {}),
+      include: { post: { include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true, reposts: true, views: true } }, likes: { where: { userId }, select: { userId: true } }, reposts: { where: { userId }, select: { userId: true } } } } },
+    });
+    const hasMore = rows.length > pageSize;
+    const data = rows.slice(0, pageSize).map(({ post, createdAt }) => ({ ...post, bookmarked: true, bookmarkCreatedAt: createdAt, liked: Boolean(post.likes.length), reposted: Boolean(post.reposts.length), likes: undefined, reposts: undefined }));
+    return { data, nextCursor: hasMore ? data.at(-1)?.id ?? null : null };
+  }
+
+
+  async trending(viewerId?: string) {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const blockedByViewer = viewerId ? await this.prisma.block.findMany({ where: { blockerId: viewerId }, select: { blockedId: true } }) : [];
+    const blockedViewer = viewerId ? await this.prisma.block.findMany({ where: { blockedId: viewerId }, select: { blockerId: true } }) : [];
+    const mutedRows = viewerId ? await this.prisma.accountMute.findMany({ where: { userId: viewerId }, select: { mutedUserId: true } }) : [];
+    const excluded = [...blockedByViewer.map((row) => row.blockedId), ...blockedViewer.map((row) => row.blockerId), ...mutedRows.map((row) => row.mutedUserId)];
+    const rows = await this.prisma.post.findMany({ where: { deletedAt: null, createdAt: { gte: since }, authorId: { notIn: excluded }, author: { deletedAt: null, deactivatedAt: null, profile: { university: { slug: 'university-of-kabianga' } } } }, orderBy: { createdAt: 'desc' }, take: 100, include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true, reposts: true, views: true } }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } }, bookmarks: { where: { userId: viewerId }, select: { userId: true } } } : {}) } });
+    const ranked = rows.sort((a, b) => (b._count.likes + b._count.comments * 2 + b._count.reposts * 3) - (a._count.likes + a._count.comments * 2 + a._count.reposts * 3) || b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 20);
+    return { data: ranked.map(({ likes, bookmarks, ...post }) => ({ ...post, liked: Boolean(likes?.length), bookmarked: Boolean(bookmarks?.length) })) };
+  }
+
 
   async recordView(userId: string, postId: string) {
     await this.assertCanInteract(userId, postId);

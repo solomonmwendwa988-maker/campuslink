@@ -27,6 +27,9 @@ export class ProfilesController {
   @Get('discover')
   discover(@Req() req: RequestWithUser, @Query() query: DiscoverStudentsDto) { return this.profiles.discover(req.user!.id, query.search); }
 
+  @Get('recommended') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
+  recommended(@Req() req: RequestWithUser) { return this.profiles.recommended(req.user!.id); }
+
   @Get(':username')
   publicProfile(@Param('username') username: string, @Req() req: RequestWithUser) { return this.profiles.byUsername(req.user?.id, username); }
 

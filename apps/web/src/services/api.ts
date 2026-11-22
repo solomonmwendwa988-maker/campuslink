@@ -461,6 +461,45 @@ export async function getProfileFollowers(username: string, cursor?: string) {
   );
 }
 
+export async function getProfileFollowing(username: string, cursor?: string) {
+  const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return request<{ data: MessagingPerson[]; nextCursor: string | null }>(
+    `/profiles/${encodeURIComponent(username.replace(/^@/, ''))}/following${suffix}`,
+    { authenticated: true },
+  );
+}
+
+export interface SocialPostApiRecord {
+  id: string; content: string; createdAt: string; updatedAt?: string; authorId: string;
+  author?: MessagingPerson; _count?: { likes: number; comments: number; reposts: number; views?: number };
+  liked?: boolean; bookmarked?: boolean; reposted?: boolean; viewed?: boolean; media?: Array<{ id: string; url: string; position: number }>;
+}
+export type SocialPage = { data: SocialPostApiRecord[]; nextCursor: string | null };
+export async function getSocialFeed(options: { cursor?: string; mode?: 'latest' | 'popular'; following?: boolean } = {}) {
+  const query = new URLSearchParams(); if (options.cursor) query.set('cursor', options.cursor); if (options.mode && !options.following) query.set('mode', options.mode);
+  const path = options.following ? '/posts/following' : '/posts';
+  return request<SocialPage>(`${path}${query.size ? `?${query.toString()}` : ''}`, { authenticated: true });
+}
+export async function getSavedSocialPosts(cursor?: string) {
+  const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return request<SocialPage>(`/posts/saved${suffix}`, { authenticated: true });
+}
+export async function getTrendingSocialPosts() {
+  return request<{ data: SocialPostApiRecord[] }>('/posts/trending', { authenticated: true });
+}
+export async function getRecommendedStudents() {
+  return request<{ data: Array<{ user: DiscoverStudent; sharedInterests: number }> }>('/profiles/recommended', { authenticated: true });
+}
+export async function likeSocialPost(postId: string) { return request<{ liked: boolean }>(`/posts/${encodeURIComponent(postId)}/like`, { method: 'POST', authenticated: true }); }
+export async function unlikeSocialPost(postId: string) { return request<{ liked: boolean }>(`/posts/${encodeURIComponent(postId)}/like`, { method: 'DELETE', authenticated: true }); }
+export async function bookmarkSocialPost(postId: string) { return request<{ bookmarked: boolean }>(`/posts/${encodeURIComponent(postId)}/bookmark`, { method: 'POST', authenticated: true }); }
+export async function unbookmarkSocialPost(postId: string) { return request<{ bookmarked: boolean }>(`/posts/${encodeURIComponent(postId)}/bookmark`, { method: 'DELETE', authenticated: true }); }
+export async function repostSocialPost(postId: string) { return request<{ reposted: boolean }>(`/posts/${encodeURIComponent(postId)}/repost`, { method: 'POST', authenticated: true }); }
+export async function unrepostSocialPost(postId: string) { return request<{ reposted: boolean }>(`/posts/${encodeURIComponent(postId)}/repost`, { method: 'DELETE', authenticated: true }); }
+export async function createSocialComment(postId: string, content: string, parentId?: string) { return request(`/posts/${encodeURIComponent(postId)}/comments`, { method: 'POST', authenticated: true, body: JSON.stringify({ content, ...(parentId ? { parentId } : {}) }) }); }
+export async function getSocialComments(postId: string, cursor?: string) { const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''; return request<{ data: unknown[]; nextCursor: string | null }>(`/posts/${encodeURIComponent(postId)}/comments${suffix}`, { authenticated: true }); }
+export async function getActivitySummary() { return request<{ unreadNotifications: number; engagement: { posts: number; likesReceived: number; commentsReceived: number; repostsReceived: number; totalReceived: number } }>('/notifications/summary', { authenticated: true }); }
+
 /* =========================================================
    CAMPUS MARKETPLACE (database-backed)
    ========================================================= */

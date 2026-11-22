@@ -21,6 +21,18 @@ export class NotificationsService {
     return { data: data.map(({ actorId, ...notification }) => ({ ...notification, actor: actorId ? actorById.get(actorId) ?? null : null })), nextCursor: hasMore ? pageRows.at(-1)?.id ?? null : null };
   }
 
+  async summary(userId: string) {
+    const [unreadNotifications, posts, likesReceived, commentsReceived, repostsReceived] = await Promise.all([
+      this.prisma.notification.count({ where: { recipientId: userId, readAt: null } }),
+      this.prisma.post.count({ where: { authorId: userId, deletedAt: null } }),
+      this.prisma.like.count({ where: { userId: { not: userId }, post: { authorId: userId, deletedAt: null } } }),
+      this.prisma.comment.count({ where: { authorId: { not: userId }, post: { authorId: userId, deletedAt: null }, deletedAt: null } }),
+      this.prisma.repost.count({ where: { userId: { not: userId }, post: { authorId: userId, deletedAt: null } } }),
+    ]);
+    return { unreadNotifications, engagement: { posts, likesReceived, commentsReceived, repostsReceived, totalReceived: likesReceived + commentsReceived + repostsReceived } };
+  }
+
+
   async markRead(userId: string, id: string) {
     const result = await this.prisma.notification.updateMany({ where: { id, recipientId: userId, readAt: null }, data: { readAt: new Date() } });
     if (!result.count && !(await this.prisma.notification.findFirst({ where: { id, recipientId: userId }, select: { id: true } }))) throw new NotFoundException('Notification not found.');

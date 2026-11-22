@@ -12,7 +12,13 @@ type RequestWithUser = Request & { user?: { id: string } };
 export class PostsController {
   constructor(@Inject(PostsService) private readonly posts: PostsService) {}
 
-  @Get() feed(@Query() query: PostPageDto) { return this.posts.feed(undefined, query.cursor); }
+  @Get() feed(@Query() query: PostPageDto) { return this.posts.feed(undefined, query.cursor, false, query.mode === 'popular' ? 'popular' : 'latest'); }
+
+  @Get('saved') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
+  saved(@Req() req: RequestWithUser, @Query() query: PostPageDto) { return this.posts.saved(req.user!.id, query.cursor); }
+
+  @Get('trending')
+  trending(@Req() req: RequestWithUser) { return this.posts.trending(req.user?.id); }
 
   @Get('following') @UseGuards(AuthGuard('jwt')) @ApiBearerAuth()
   following(@Req() req: RequestWithUser, @Query() query: PostPageDto) { return this.posts.feed(req.user!.id, query.cursor, true); }

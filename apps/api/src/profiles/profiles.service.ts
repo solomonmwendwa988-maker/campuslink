@@ -60,6 +60,27 @@ export class ProfilesService {
   }
 
 
+  async recommended(viewerId: string) {
+    const viewer = await this.prisma.profile.findUnique({ where: { userId: viewerId }, select: { campus: { select: { name: true } }, course: true, interests: true } });
+    const [blockedRows, mutedRows, followedRows] = await Promise.all([
+      this.prisma.block.findMany({ where: { OR: [{ blockerId: viewerId }, { blockedId: viewerId }] }, select: { blockerId: true, blockedId: true } }),
+      this.prisma.accountMute.findMany({ where: { userId: viewerId }, select: { mutedUserId: true } }),
+      this.prisma.follow.findMany({ where: { followerId: viewerId }, select: { followedId: true } }),
+    ]);
+    const excluded = [...blockedRows.map(row => row.blockerId === viewerId ? row.blockedId : row.blockerId), ...mutedRows.map(row => row.mutedUserId), ...followedRows.map(row => row.followedId), viewerId];
+    const candidates = await this.prisma.user.findMany({ where: { id: { notIn: excluded }, deletedAt: null, deactivatedAt: null, profile: { isPrivate: false, university: { slug: 'university-of-kabianga' } } }, select: profileSelect, orderBy: { createdAt: 'desc' }, take: 100 });
+    const viewerInterests = new Set((viewer?.interests ?? []).map(value => value.toLowerCase()));
+    const ranked = candidates.map(user => {
+      const candidateInterests = (user.profile?.interests ?? []).map(value => value.toLowerCase());
+      const shared = candidateInterests.filter(value => viewerInterests.has(value)).length;
+      const campusMatch = Boolean(viewer?.campus?.name && user.profile?.campus?.name && viewer.campus.name.toLowerCase() === user.profile.campus.name.toLowerCase());
+      const courseMatch = Boolean(viewer?.course && user.profile?.course && viewer.course.toLowerCase() === user.profile.course.toLowerCase());
+      return { user, score: shared * 5 + (courseMatch ? 2 : 0) + (campusMatch ? 3 : 0), sharedInterests: shared };
+    }).sort((a, b) => b.score - a.score || (b.user._count.followedBy - a.user._count.followedBy)).slice(0, 40);
+    return { data: ranked.map(({ user, sharedInterests }) => ({ user: { ...user, profile: user.profile }, sharedInterests })) };
+  }
+
+
   async byUsername(viewerId: string | undefined, username: string) {
     const user = await this.prisma.user.findUnique({ where: { username: username.toLowerCase(), deletedAt: null, deactivatedAt: null }, select: profileSelect });
     if (!user) throw new NotFoundException('Profile not found.');

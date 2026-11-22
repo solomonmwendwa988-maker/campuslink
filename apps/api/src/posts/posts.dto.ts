@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 export class CreatePostDto {
   @ApiProperty({ maxLength: 3000 }) @IsString() @MinLength(1) @MaxLength(3000) content!: string;
@@ -12,4 +12,5 @@ export class CreateCommentDto {
 
 export class PostPageDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID() cursor?: string;
+  @ApiPropertyOptional({ enum: ['latest', 'popular'] }) @IsOptional() @IsIn(['latest', 'popular']) mode?: 'latest' | 'popular';
 }

@@ -11,6 +11,7 @@ type RequestWithUser = Request & { user?: { id: string } };
 export class NotificationsController {
   constructor(@Inject(NotificationsService) private readonly notifications: NotificationsService) {}
   @Get() list(@Req() req: RequestWithUser, @Query('cursor') cursor?: string) { return this.notifications.list(req.user!.id, cursor); }
+  @Get('summary') summary(@Req() req: RequestWithUser) { return this.notifications.summary(req.user!.id); }
   @Patch('read-all') readAll(@Req() req: RequestWithUser) { return this.notifications.markAllRead(req.user!.id); }
   @Patch(':id/read') read(@Param('id', ParseUUIDPipe) id: string, @Req() req: RequestWithUser) { return this.notifications.markRead(req.user!.id, id); }
 }
