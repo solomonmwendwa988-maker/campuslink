@@ -1,0 +1,20 @@
+CampusLink Phase 2.1 — UI polish and custom confirmation dialog repair
+
+
+Why this patch:
+The ConfirmDialog React component is present and used, but its campus-dialog CSS was missing from core.css. That made the modal appear as unstyled raw content (including the close icon sitting outside the dialog). This patch adds the missing modal styles and upgrades the blocked/muted account cards.
+
+
+Install:
+1. Extract this ZIP into the root of your CampusLink workspace:
+   C:\Users\ShadowNeko\Videos\campuslink_web
+2. Allow overwrite of apps/web/src/styles/core.css only.
+3. No database commands or API rebuild are required for this CSS-only patch.
+4. Rebuild frontend:
+   npm run build -w apps/web
+5. Push when build succeeds:
+   git add apps/web/src/styles/core.css
+   git commit -m "Polish account safety UI and custom confirmation dialogs"
+   git push origin main
+
+The modal CSS is scoped to campus-dialog classes and the account management UI to settings-safety classes. This patch does not change APIs, database, or messaging logic.
