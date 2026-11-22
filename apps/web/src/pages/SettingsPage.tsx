@@ -5,6 +5,7 @@ import { useLocalState } from '../hooks/useLocalState';
 import { launchUniversity } from '../data/universities';
 import { useTheme } from '../app/providers/ThemeProvider';
 import { optimizeImage } from '../services/imageProcessing';
+import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 type SettingsProps = {
@@ -35,6 +36,7 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
   const [draft, setDraft] = useState(profile);
   const [saved, setSaved] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [blocked, setBlocked] = useLocalState<string[]>('blocked-students', []);
   const [muted, setMuted] = useLocalState<string[]>('muted-students', []);
   const [blockDraft, setBlockDraft] = useState('');
@@ -155,8 +157,9 @@ export function SettingsPage({ profile, onSaveProfile, preferences, setPreferenc
 
         <section className="card settings-card" id="settings-help"><h2><CircleHelp size={18}/> Help &amp; legal</h2><a className="settings-link-row" href="mailto:support@campuslink.ke?subject=CampusLink%20support">Help center &amp; support <ChevronRight size={16}/></a><a className="settings-link-row" href="mailto:feedback@campuslink.ke?subject=CampusLink%20feedback">Send feedback <ChevronRight size={16}/></a><details className="settings-legal"><summary>Privacy policy &amp; terms <ChevronRight size={16}/></summary><p>CampusLink is currently a frontend preview for University of Kabianga. Profile, post and preference data may be saved in this browser. Do not enter sensitive information. Authentication, account deletion, email, notifications and messaging are not connected to a production service. These preview notes are not a substitute for published legal terms.</p></details><div className="settings-app-info">CampusLink · Connect. Discover. Trade. Grow. <small>University of Kabianga preview · 0.1.0</small></div></section>
 
-        <section className="card settings-card settings-account-card" id="settings-account"><h2>Account</h2><p>These actions only affect this local preview.</p><button className="outline-btn" type="button" onClick={onLogout}>Log out</button><button className="danger-button" type="button" onClick={() => { if (window.confirm('Delete/reset all CampusLink preview data stored in this browser? This cannot be undone.')) onReset(); }}><Trash2 size={14}/> Delete preview data</button></section>
+        <section className="card settings-card settings-account-card" id="settings-account"><h2>Account</h2><p>These actions only affect this local preview.</p><button className="outline-btn" type="button" onClick={onLogout}>Log out</button><button className="danger-button" type="button" onClick={() => setResetDialogOpen(true)}><Trash2 size={14}/> Delete preview data</button></section>
       </div>
     </div>
+    <ConfirmDialog open={resetDialogOpen} title="Delete local preview data?" description="This removes CampusLink preview data saved in this browser. This action cannot be undone." confirmLabel="Delete data" tone="danger" onCancel={() => setResetDialogOpen(false)} onConfirm={() => { setResetDialogOpen(false); onReset(); }}/>
   </>;
 }

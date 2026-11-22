@@ -102,64 +102,51 @@
 @keyframes campuslink-typing{0%,60%,100%{opacity:.35;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
 @media(max-width:720px){.instagram-messages .conversation-avatar,.instagram-messages .conversation-avatar .avatar{width:56px;height:56px;min-width:56px;max-width:56px;flex-basis:56px}.instagram-messages .conversation-avatar>i{right:0;bottom:1px}}
 
-/* Phase 1 mobile inbox hardening: deterministic viewport sizing and independent scrolling. */
-@media (max-width: 720px) {
-  html, body, #root { min-height: 100%; }
-  body { overflow-x: hidden; }
-  .messaging-route { min-height: 100dvh; overflow-x: clip; }
-  .messaging-route .layout {
-    display: block !important;
-    width: 100%; max-width: none; margin: 0; padding: 0 !important;
-    min-height: 0; height: auto;
-  }
-  .messaging-route .content {
-    width: 100%; max-width: none; min-width: 0; margin: 0; padding: 0;
-  }
-  .messaging-route .messages-page.instagram-messages {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) !important;
-    grid-template-rows: minmax(0, 1fr) !important;
-    width: 100%; max-width: 100%; min-width: 0;
-    height: calc(100dvh - 64px - env(safe-area-inset-top) - 62px - env(safe-area-inset-bottom));
-    min-height: 0 !important; max-height: none;
-    margin: 0; padding: 0; border: 0; border-radius: 0;
-    overflow: hidden; box-shadow: none;
-    background: var(--panel);
-  }
-  .messaging-route .messages-page .conversation-list {
-    display: flex !important; flex-direction: column;
-    width: 100%; height: 100%; min-width: 0; min-height: 0; max-height: 100%;
-    overflow: hidden; padding: 14px 14px max(8px, env(safe-area-inset-bottom));
-  }
-  .messaging-route .messages-page .conversation-list-header,
-  .messaging-route .messages-page .message-search,
-  .messaging-route .messages-page .new-chat-form,
-  .messaging-route .messages-page .messages-error { flex: 0 0 auto; }
-  .messaging-route .messages-page .conversation-items {
-    display: flex; flex: 1 1 0%; flex-direction: column;
-    width: 100%; min-width: 0; min-height: 0; max-height: none;
-    overflow-x: hidden; overflow-y: auto;
-    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-    padding: 4px 0 12px; gap: 2px;
-  }
-  .messaging-route .messages-page .conversation-items > button.conversation {
-    display: flex; flex: 0 0 auto; width: 100%; min-width: 0;
-  }
-  .messaging-route .messages-page .inbox-empty,
-  .messaging-route .messages-page .conversation-empty,
-  .messaging-route .messages-page .inbox-skeleton { flex: 0 0 auto; }
-  .messaging-route .messages-page.mobile-chat-open {
-    height: calc(100dvh - 64px - env(safe-area-inset-top));
-  }
-  .messaging-route .messages-page.mobile-chat-open .chat-active {
-    display: flex !important; flex-direction: column;
-    width: 100%; height: 100%; min-width: 0; min-height: 0; max-height: 100%; overflow: hidden;
-  }
-  .messaging-route .messages-page.mobile-chat-open .chat-scroll {
-    flex: 1 1 0%; min-height: 0; max-height: none;
-    overflow-x: hidden; overflow-y: auto;
-    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  }
-  .messaging-route .messages-page.mobile-chat-open .chat-send { flex: 0 0 auto; }
-  .messaging-route:has(.mobile-chat-open) .mobile-bottom-nav { display: none !important; }
+/* Phase 1.1: compact mobile conversation canvas and branded dialogs */
+.instagram-messages .ig-chat-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+@media(max-width:720px){
+  .instagram-messages .chat-profile-intro{display:none!important}
+  .instagram-messages .ig-chat-scroll{padding:12px 12px 16px;gap:9px;min-height:0}
+  .instagram-messages .ig-chat-send{flex:none;margin:5px 8px 7px;padding:5px 6px 5px 12px;gap:7px;max-width:calc(100% - 16px);width:calc(100% - 16px);border-radius:24px}
+  .instagram-messages .ig-chat-send input{font-size:16px;min-height:44px;line-height:1.35}
+  .instagram-messages .ig-chat-send button{width:42px;height:42px;min-width:42px}
+  .instagram-messages .ig-chat-head{flex:none}
+  .instagram-messages .chat-contact-profile{min-width:0;flex:1;overflow:hidden}
+  .instagram-messages .chat-contact{overflow:hidden}
+  .instagram-messages .chat-contact strong,.instagram-messages .chat-contact small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .instagram-messages .chat-contact-menu-trigger{flex:none}
+  .instagram-messages .ig-message-row{max-width:100%}
+  .instagram-messages .ig-bubble{max-width:min(86%,360px);word-break:break-word}
 }
+.campus-dialog-backdrop{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(9,16,31,.58);backdrop-filter:blur(7px);animation:campus-dialog-in .14s ease-out}
+.campus-dialog{position:relative;width:min(100%,420px);border:1px solid var(--line);border-radius:20px;padding:26px;background:var(--panel);color:var(--text);box-shadow:0 24px 80px rgba(0,0,0,.24);animation:campus-dialog-card-in .18s ease-out}
+.campus-dialog-close{position:absolute;right:13px;top:13px;width:34px;height:34px;display:grid;place-items:center;border-radius:10px;color:var(--muted);background:transparent}
+.campus-dialog-close:hover{background:var(--panel2);color:var(--text)}
+.campus-dialog-icon{width:46px;height:46px;display:grid;place-items:center;border-radius:14px;margin-bottom:14px;background:var(--panel2);color:var(--accent)}
+.campus-dialog-icon.danger{background:rgba(220,60,70,.1);color:#e2535d}
+.campus-dialog h2{margin:0 35px 8px 0;font-size:19px;letter-spacing:-.025em}
+.campus-dialog p{margin:0;color:var(--muted);font-size:13px;line-height:1.6}
+.campus-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}
+.campus-dialog-actions button{min-height:42px;padding:0 16px;border-radius:11px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.campus-dialog-cancel{border:1px solid var(--line);background:var(--panel);color:var(--text)}
+.campus-dialog-confirm{background:var(--accent);color:#fff}
+.campus-dialog-confirm.danger{background:#dc4553;color:#fff}
+.campus-dialog-actions button:disabled,.campus-dialog-close:disabled{opacity:.55;cursor:wait}
+.campus-report-dialog textarea{width:100%;min-height:110px;margin-top:16px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:13px;resize:vertical;outline:none}
+.campus-report-dialog textarea:focus{border-color:var(--accent)}
+@keyframes campus-dialog-in{from{opacity:0}to{opacity:1}}
+@keyframes campus-dialog-card-in{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:480px){.campus-dialog-backdrop{align-items:flex-end;padding:12px}.campus-dialog{width:100%;border-radius:20px;padding:24px 20px calc(22px + env(safe-area-inset-bottom));max-height:calc(100dvh - 24px);overflow:auto}.campus-dialog-actions button{flex:1}}
+.campus-edit-backdrop{position:fixed;inset:0;z-index:1190;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(9,16,31,.58);backdrop-filter:blur(7px)}
+.campus-edit-hidden{display:none}
+.campus-edit-dialog{width:min(100%,520px);padding:22px;border:1px solid var(--line);border-radius:18px;background:var(--panel);color:var(--text);box-shadow:0 24px 80px rgba(0,0,0,.24)}
+.campus-edit-dialog h3{margin:0 0 14px;font-size:18px}
+.campus-edit-dialog textarea{width:100%;min-height:150px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--text);font:inherit;resize:vertical}
+.campus-edit-dialog>div{display:flex;justify-content:flex-end;gap:9px;margin-top:15px}
+.campus-edit-dialog>div button{padding:10px 15px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-weight:600}
+.campus-edit-dialog>div button:last-child{background:var(--accent);color:#fff;border-color:transparent}
+.campus-edit-dialog>div button:disabled{opacity:.5}
+@media(max-width:480px){.campus-edit-backdrop{align-items:flex-end;padding:12px}.campus-edit-dialog{width:100%;padding:20px;border-radius:18px 18px 12px 12px}}
+.post-share-feedback{display:block;margin:6px 12px;color:var(--muted);font-size:11px}
+
+.campus-dialog-alert-mark{font-size:26px;font-weight:800;line-height:1}
