@@ -181,3 +181,34 @@ body{background:var(--bg);color:var(--text)}
 .campus-dialog-close:focus-visible,.campus-dialog-actions button:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 45%,white)!important;outline-offset:2px!important}
 @media(max-width:560px){.campus-dialog{padding:22px!important;border-radius:20px!important}.campus-dialog-actions{display:grid!important;grid-template-columns:1fr 1fr!important}.campus-dialog-actions button{width:100%!important}}
 @media(prefers-reduced-motion:reduce){.campus-dialog-backdrop,.campus-dialog{animation:none!important}}
+
+/* Phase 1C production stabilization: enforce consistent circular verification mark */
+.campuslink-verified-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  flex: 0 0 16px !important;
+  border-radius: 50% !important;
+  aspect-ratio: 1 / 1 !important;
+  overflow: hidden !important;
+  background: #1877f2 !important;
+  color: #fff !important;
+  line-height: 0 !important;
+}
+.campuslink-verified-badge svg {
+  width: 11px !important;
+  height: 11px !important;
+  stroke-width: 3 !important;
+}
+.comment-replies {
+  margin: 10px 0 0 38px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border, #dbe3ef);
+  display: grid;
+  gap: 12px;
+}
+.comment-reply { margin: 0; }
+.comment-thread-item { margin: 0 0 14px; }

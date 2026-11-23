@@ -4,6 +4,7 @@ export type Post = {
   handle: string;
   school: string;
   avatar: string;
+  avatarImage?: string;
   time: string;
   content: string;
   likes: number;
