@@ -21,16 +21,17 @@ export class MarketplaceService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(query: ListingQueryDto, viewerId?: string) {
+    if (query.minPrice !== undefined && query.maxPrice !== undefined && query.minPrice > query.maxPrice) throw new ForbiddenException('Minimum price cannot exceed maximum price.');
     const profile = viewerId ? await this.prisma.profile.findUnique({ where: { userId: viewerId }, select: { campusId: true } }) : null;
     const blocked = viewerId ? await this.prisma.block.findMany({ where: { OR: [{ blockerId: viewerId }, { blockedId: viewerId }] }, select: { blockerId: true, blockedId: true } }) : [];
     const excluded = blocked.map((row) => row.blockerId === viewerId ? row.blockedId : row.blockerId);
     const listings = await this.prisma.listing.findMany({
       where: { deletedAt: null, campus: { university: { slug: 'university-of-kabianga' } }, seller: { deletedAt: null, deactivatedAt: null }, ...(profile ? { campusId: profile.campusId } : {}), sellerId: { notIn: excluded }, available: true,
         ...(query.search ? { OR: [{ title: { contains: query.search, mode: 'insensitive' } }, { description: { contains: query.search, mode: 'insensitive' } }] } : {}),
-        ...(query.category ? { category: { equals: query.category, mode: 'insensitive' } } : {}),
+        ...(query.category ? { category: { equals: query.category, mode: 'insensitive' } } : {}), ...(query.condition ? { condition: query.condition } : {}),
         ...(query.minPrice !== undefined || query.maxPrice !== undefined ? { price: { ...(query.minPrice !== undefined ? { gte: query.minPrice } : {}), ...(query.maxPrice !== undefined ? { lte: query.maxPrice } : {}) } } : {}),
       },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 21, ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}), include: listingInclude,
+      orderBy: query.sort === 'PRICE_LOW' ? [{ price: 'asc' }, { createdAt: 'desc' }] : query.sort === 'PRICE_HIGH' ? [{ price: 'desc' }, { createdAt: 'desc' }] : [{ createdAt: 'desc' }, { id: 'desc' }], take: 21, ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}), include: listingInclude,
     });
     const hasMore = listings.length > 20; const data = listings.slice(0, 20);
     return { data, nextCursor: hasMore ? data.at(-1)?.id ?? null : null };
