@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateCommentDto, CreatePostDto } from './posts.dto.js';
 
-const authorSelect = { id: true, username: true, profile: { select: { fullName: true, photoUrl: true, campus: { select: { name: true } } } } } satisfies Prisma.UserSelect;
+const authorSelect = { id: true, username: true, profile: { select: { fullName: true, photoUrl: true, verifiedAt: true, campus: { select: { name: true } } } } } satisfies Prisma.UserSelect;
 const pageSize = 20;
 
 @Injectable()

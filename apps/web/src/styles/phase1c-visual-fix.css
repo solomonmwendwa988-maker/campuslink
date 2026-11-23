@@ -62,3 +62,13 @@
 .comment-compose{display:flex;gap:8px;align-items:center;}
 .comment-compose input{flex:1;min-width:0;}
 @media(max-width:520px){.comment-item{gap:7px}.comment-content{font-size:11.5px}}
+
+/* Phase 1C.1: comment author identity actions */
+.comment-author-link{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:0;margin:0;border:0;background:transparent;color:var(--text);
+  font:inherit;font-weight:700;text-align:left;cursor:pointer;max-width:100%;
+}
+.comment-author-link:hover .campuslink-name-text{ text-decoration:underline; text-underline-offset:2px; }
+.comment-author-link:focus-visible{outline:2px solid var(--accent,#2878e8);outline-offset:2px;border-radius:3px;}
+.comment-author-link .campuslink-name-with-badge{vertical-align:baseline;}
