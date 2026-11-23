@@ -44,3 +44,21 @@
   .campus-dialog-logout .campus-dialog-actions button{width:100%!important}
 }
 @media(prefers-reduced-motion:reduce){.campus-dialog-logout,.campus-dialog-logout *{animation:none!important;transition:none!important}}
+
+/* 1C.2: Meta-inspired verified mark and functional comment thread */
+.campuslink-verified-badge{width:14px!important;height:14px!important;border-radius:0!important;clip-path:polygon(50% 0%,61% 5%,73% 2%,81% 12%,93% 15%,94% 28%,100% 39%,94% 50%,100% 61%,94% 72%,93% 85%,81% 88%,73% 98%,61% 95%,50% 100%,39% 95%,27% 98%,19% 88%,7% 85%,6% 72%,0% 61%,6% 50%,0% 39%,6% 28%,7% 15%,19% 12%,27% 2%,39% 5%)!important;background:#1877f2!important;color:#fff!important;box-shadow:none!important;display:inline-grid!important;place-items:center!important;flex:0 0 14px!important;line-height:0!important;}
+.campuslink-verified-badge svg{width:9.5px!important;height:9.5px!important;stroke:#fff!important;stroke-width:3.1!important;}
+.campuslink-name-with-badge{gap:4px!important;white-space:nowrap!important;}
+.comment-thread{display:grid;gap:10px;padding:12px 0 0;}
+.comment-loading,.comment-empty{font-size:12px;color:var(--muted);padding:8px 4px;}
+.comment-error{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--danger) 25%,var(--line));border-radius:12px;color:var(--danger);font-size:12px;}
+.comment-error button{border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--panel2);color:var(--text);font:inherit;}
+.comment-item{display:flex;align-items:flex-start;gap:9px;padding:7px 0;}
+.comment-item .avatar{width:30px;height:30px;flex:0 0 30px;}
+.comment-content{min-width:0;flex:1;font-size:12px;line-height:1.45;}
+.comment-content strong{font-weight:700;color:var(--text);}
+.comment-content p{margin:2px 0 3px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text);}
+.comment-content small{color:var(--muted);font-size:10px;}
+.comment-compose{display:flex;gap:8px;align-items:center;}
+.comment-compose input{flex:1;min-width:0;}
+@media(max-width:520px){.comment-item{gap:7px}.comment-content{font-size:11.5px}}
