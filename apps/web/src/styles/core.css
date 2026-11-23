@@ -146,3 +146,38 @@ body{background:var(--bg);color:var(--text)}
 .kabianga-explore .explore-product{border-radius:13px;background:var(--panel);border:1px solid var(--line);transition:border-color .16s,transform .16s}
 .kabianga-explore .explore-product:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));transform:translateY(-2px)}
 @media(max-width:640px){.kabianga-explore-section .section-title{font-size:15px}.kabianga-explore .explore-person{padding:10px}.kabianga-explore .explore-products{grid-template-columns:1fr}}
+
+/* Phase 1A.1 — polished confirmation and report dialogs */
+.campus-dialog-backdrop{background:rgba(9,15,28,.48)!important;backdrop-filter:blur(4px)!important;-webkit-backdrop-filter:blur(4px)!important}
+.campus-dialog{width:min(420px,calc(100vw - 36px))!important;gap:14px!important;padding:24px!important;border-radius:20px!important;background:var(--panel)!important;border-color:color-mix(in srgb,var(--line) 88%,var(--accent))!important;box-shadow:0 24px 70px rgba(4,12,26,.24),0 2px 8px rgba(4,12,26,.08)!important}
+.campus-dialog-close{top:13px!important;right:13px!important;width:32px!important;height:32px!important;border-radius:9px!important;background:var(--panel2)!important;transition:background .15s,color .15s,transform .15s!important}
+.campus-dialog-close:hover:not(:disabled){transform:rotate(3deg)!important}
+.campus-dialog-icon{width:44px!important;height:44px!important;border-radius:14px!important;margin-bottom:0!important}
+.campus-dialog-icon.primary{background:color-mix(in srgb,var(--accent) 10%,var(--panel))!important}
+.campus-dialog-icon.danger{background:color-mix(in srgb,var(--danger) 10%,var(--panel))!important}
+.campus-dialog h2{font-size:20px!important;letter-spacing:-.55px!important;padding-right:32px!important}
+.campus-dialog>p{font-size:13px!important;line-height:1.55!important;max-width:38ch!important}
+.campus-dialog-actions{margin-top:4px!important;padding-top:13px!important;gap:8px!important}
+.campus-dialog-actions button{min-height:40px!important;border-radius:10px!important;padding:0 16px!important;font-size:12px!important}
+.campus-dialog-cancel{background:var(--panel2)!important;border-color:var(--line)!important}
+.campus-dialog-confirm.danger{box-shadow:none!important;background:var(--danger)!important;border-color:var(--danger)!important}
+.campus-dialog-confirm.primary{box-shadow:none!important}
+.campus-dialog-actions button:focus-visible,.campus-dialog-close:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 45%,transparent)!important;outline-offset:2px!important}
+@media(max-width:520px){.campus-dialog{padding:21px!important;width:min(100%,440px)!important;border-radius:18px!important}.campus-dialog-actions{display:flex!important;grid-template-columns:none!important}.campus-dialog-actions button{width:auto!important;min-width:94px!important;min-height:44px!important}}
+@media(prefers-reduced-motion:reduce){.campus-dialog-backdrop,.campus-dialog{animation:none!important}.campus-dialog-actions button,.campus-dialog-close{transition:none!important}}
+
+/* Phase 1C: polished identity badge and dialog presentation */
+.campuslink-name-with-badge{display:inline-flex;align-items:center;gap:5px;min-width:0;vertical-align:middle}
+.campuslink-name-text{min-width:0}
+.campuslink-verified-badge{display:inline-grid;place-items:center;flex:0 0 auto;width:17px;height:17px;border-radius:50%;background:#2878e8;color:#fff;box-shadow:0 0 0 2px color-mix(in srgb,var(--panel) 90%,transparent);vertical-align:middle}
+.campuslink-verified-badge svg{display:block}
+.campus-dialog-backdrop{background:rgba(11,20,39,.62)!important;backdrop-filter:blur(10px)!important;-webkit-backdrop-filter:blur(10px)!important}
+.campus-dialog{border-radius:24px!important;padding:28px!important;gap:14px!important;border-color:color-mix(in srgb,var(--accent) 16%,var(--line))!important;box-shadow:0 32px 100px rgba(5,14,31,.36),0 1px 0 rgba(255,255,255,.28) inset!important}
+.campus-dialog-icon{width:54px!important;height:54px!important;border-radius:18px!important}
+.campus-dialog h2{font-size:clamp(19px,2.5vw,22px)!important;letter-spacing:-.5px!important}
+.campus-dialog-actions{gap:10px!important}
+.campus-dialog-actions button{min-height:44px!important;border-radius:12px!important;padding-inline:17px!important}
+.campus-dialog-close{width:36px!important;height:36px!important;border-radius:11px!important}
+.campus-dialog-close:focus-visible,.campus-dialog-actions button:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 45%,white)!important;outline-offset:2px!important}
+@media(max-width:560px){.campus-dialog{padding:22px!important;border-radius:20px!important}.campus-dialog-actions{display:grid!important;grid-template-columns:1fr 1fr!important}.campus-dialog-actions button{width:100%!important}}
+@media(prefers-reduced-motion:reduce){.campus-dialog-backdrop,.campus-dialog{animation:none!important}}

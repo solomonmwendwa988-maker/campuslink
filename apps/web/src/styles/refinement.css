@@ -2,8 +2,9 @@
 .avatar { border-radius: 50% !important; overflow: hidden; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
 .profile-mini .avatar { width: 36px; height: 36px; }
-.header-logout { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--muted); transition: background .16s, color .16s; }
-.header-logout:hover, .header-logout:focus-visible { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); outline: none; }
+.header-logout { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 12px; color: var(--danger); background: color-mix(in srgb, var(--danger) 5%, var(--panel)); transition: background .16s, color .16s, transform .16s; }
+.header-logout:hover, .header-logout:focus-visible { color: white; background: var(--danger); outline: none; transform: translateY(-1px); }
+.post-identity-avatar,.post-author-link{border:0;background:none;padding:0;cursor:pointer;color:inherit;text-align:left}.post-identity-avatar{display:flex;flex:none;border-radius:50%}.post-author-link{display:inline-flex;align-items:center;gap:5px;font:inherit;font-weight:700}.post-author-link:hover strong{text-decoration:underline}.post-verified-badge{margin-left:0!important;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;background:#eaf2ff;color:#2563eb;border:1px solid #b9d2ff}.post-verified-badge svg{margin:0!important;transform:none!important;background:none!important;stroke-width:2.5!important}
 .message-list-skeleton { display: grid; gap: 9px; padding: 10px 2px; }.message-skeleton-row { display: flex; align-items: center; gap: 12px; min-height: 74px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--panel2) 55%, transparent); }
 .message-skeleton-avatar, .message-skeleton-line { background: linear-gradient(100deg, color-mix(in srgb, var(--line) 55%, transparent) 20%, color-mix(in srgb, var(--muted) 18%, transparent) 45%, color-mix(in srgb, var(--line) 55%, transparent) 70%); background-size: 220% 100%; animation: campuslink-skeleton-shimmer 1.35s ease-in-out infinite; }
 .message-skeleton-avatar { width: 42px; height: 42px; flex: none; border-radius: 50%; }

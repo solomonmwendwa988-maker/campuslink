@@ -1,0 +1,3 @@
+CampusLink Identity & Privacy patch files. Copy files into the matching paths in your project, replacing the current files after making a backup.
+
+IMPORTANT: Source ZIP provided was flattened and omitted directory structure; these edits are based on inspected files but could not be build-tested in the original project structure. Review App.tsx imports and the PostCard props before copying.

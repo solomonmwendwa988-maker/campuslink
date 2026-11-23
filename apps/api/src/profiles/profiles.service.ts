@@ -46,6 +46,7 @@ export class ProfilesService {
         id: { not: viewerId, notIn: excludedIds },
         deletedAt: null,
         deactivatedAt: null,
+        role: { not: 'SUPER_ADMIN' },
         profile: { isPrivate: false, ...(term ? { OR: [
           { fullName: { contains: term, mode: 'insensitive' as const } },
           { course: { contains: term, mode: 'insensitive' as const } },
@@ -68,7 +69,7 @@ export class ProfilesService {
       this.prisma.follow.findMany({ where: { followerId: viewerId }, select: { followedId: true } }),
     ]);
     const excluded = [...blockedRows.map(row => row.blockerId === viewerId ? row.blockedId : row.blockerId), ...mutedRows.map(row => row.mutedUserId), ...followedRows.map(row => row.followedId), viewerId];
-    const candidates = await this.prisma.user.findMany({ where: { id: { notIn: excluded }, deletedAt: null, deactivatedAt: null, profile: { isPrivate: false, university: { slug: 'university-of-kabianga' } } }, select: profileSelect, orderBy: { createdAt: 'desc' }, take: 100 });
+    const candidates = await this.prisma.user.findMany({ where: { id: { notIn: excluded }, deletedAt: null, deactivatedAt: null, role: { not: 'SUPER_ADMIN' }, profile: { isPrivate: false, university: { slug: 'university-of-kabianga' } } }, select: profileSelect, orderBy: { createdAt: 'desc' }, take: 100 });
     const viewerInterests = new Set((viewer?.interests ?? []).map(value => value.toLowerCase()));
     const ranked = candidates.map(user => {
       const candidateInterests = (user.profile?.interests ?? []).map(value => value.toLowerCase());
@@ -82,7 +83,7 @@ export class ProfilesService {
 
 
   async byUsername(viewerId: string | undefined, username: string) {
-    const user = await this.prisma.user.findUnique({ where: { username: username.toLowerCase(), deletedAt: null, deactivatedAt: null }, select: profileSelect });
+    const user = await this.prisma.user.findFirst({ where: { username: username.toLowerCase(), deletedAt: null, deactivatedAt: null, role: { not: 'SUPER_ADMIN' } }, select: profileSelect });
     if (!user) throw new NotFoundException('Profile not found.');
     if (viewerId && viewerId !== user.id) {
       const blocked = await this.prisma.block.findFirst({ where: { OR: [{ blockerId: viewerId, blockedId: user.id }, { blockerId: user.id, blockedId: viewerId }] } });

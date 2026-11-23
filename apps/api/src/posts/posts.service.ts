@@ -29,7 +29,7 @@ export class PostsService {
     // Popular ranking is intentionally bounded to the latest 200 eligible posts. This keeps
     // ranking predictable and avoids an unbounded aggregate scan until a dedicated ranking store exists.
     const rows = await this.prisma.post.findMany({
-      where: { deletedAt: null, author: { deletedAt: null, deactivatedAt: null, ...universityFilter }, AND: [{ authorId: { notIn: excluded } }, ...(followingIds ? [{ authorId: { in: followingIds } }] : [])] },
+      where: { deletedAt: null, author: { deletedAt: null, deactivatedAt: null, role: { not: 'SUPER_ADMIN' }, ...universityFilter }, AND: [{ authorId: { notIn: excluded } }, ...(followingIds ? [{ authorId: { in: followingIds } }] : [])] },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: popularMode ? 200 : pageSize + 1, ...(cursor && !popularMode ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true, reposts: true, views: true } }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } }, bookmarks: { where: { userId: viewerId }, select: { userId: true } }, reposts: { where: { userId: viewerId }, select: { userId: true } }, views: { where: { userId: viewerId }, select: { userId: true } } } : {}) },
     });
@@ -64,7 +64,7 @@ export class PostsService {
     const excluded = [...blockedByViewer.map((row) => row.blockedId), ...blockedViewer.map((row) => row.blockerId), ...mutedRows.map((row) => row.mutedUserId)];
     const universityId = await this.universityScope(viewerId);
     const universityFilter = universityId ? { profile: { universityId } } : {};
-    const rows = await this.prisma.post.findMany({ where: { deletedAt: null, createdAt: { gte: since }, authorId: { notIn: excluded }, author: { deletedAt: null, deactivatedAt: null, ...universityFilter } }, orderBy: { createdAt: 'desc' }, take: 100, include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true, reposts: true, views: true } }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } }, bookmarks: { where: { userId: viewerId }, select: { userId: true } } } : {}) } });
+    const rows = await this.prisma.post.findMany({ where: { deletedAt: null, createdAt: { gte: since }, authorId: { notIn: excluded }, author: { deletedAt: null, deactivatedAt: null, role: { not: 'SUPER_ADMIN' }, ...universityFilter } }, orderBy: { createdAt: 'desc' }, take: 100, include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true, reposts: true, views: true } }, ...(viewerId ? { likes: { where: { userId: viewerId }, select: { userId: true } }, bookmarks: { where: { userId: viewerId }, select: { userId: true } } } : {}) } });
     const ranked = rows.sort((a, b) => (b._count.likes + b._count.comments * 2 + b._count.reposts * 3) - (a._count.likes + a._count.comments * 2 + a._count.reposts * 3) || b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 20);
     return { data: ranked.map(({ likes, bookmarks, ...post }) => ({ ...post, liked: Boolean(likes?.length), bookmarked: Boolean(bookmarks?.length) })) };
   }
@@ -79,14 +79,14 @@ export class PostsService {
 
 
   async create(authorId: string, dto: CreatePostDto) {
-    return this.prisma.post.create({ data: { authorId, content: dto.content.trim() }, include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true } } } });
+    return this.prisma.post.create({ data: { authorId, content: dto.content.trim() }, include: { author: { select: authorSelect }, _count: { select: { likes: true, comments: true } } } }).then(async post => { await this.prisma.activityEvent.create({ data: { eventType: 'POST_CREATED', category: 'POST', outcome: 'SUCCESS', actorUserId: authorId, targetType: 'POST', targetId: post.id } }).catch(() => undefined); return post; });
   }
 
   async edit(authorId: string, postId: string, content: string) {
     const post = await this.prisma.post.findUnique({ where: { id: postId }, select: { authorId: true, deletedAt: true } });
     if (!post || post.deletedAt) throw new NotFoundException('Post not found.');
     if (post.authorId !== authorId) throw new ForbiddenException('You cannot edit this post.');
-    return this.prisma.post.update({ where: { id: postId }, data: { content: content.trim() }, include: { author: { select: authorSelect } } });
+    return this.prisma.post.update({ where: { id: postId }, data: { content: content.trim() }, include: { author: { select: authorSelect } } }).then(async updated => { await this.prisma.activityEvent.create({ data: { eventType: 'POST_EDITED', category: 'POST', outcome: 'SUCCESS', actorUserId: authorId, targetType: 'POST', targetId: postId } }).catch(() => undefined); return updated; });
   }
 
   async delete(authorId: string, postId: string) {
@@ -94,6 +94,7 @@ export class PostsService {
     if (!post || post.deletedAt) throw new NotFoundException('Post not found.');
     if (post.authorId !== authorId) throw new ForbiddenException('You cannot delete this post.');
     await this.prisma.post.update({ where: { id: postId }, data: { deletedAt: new Date() } });
+    await this.prisma.activityEvent.create({ data: { eventType: 'POST_DELETED', category: 'POST', outcome: 'SUCCESS', actorUserId: authorId, targetType: 'POST', targetId: postId } }).catch(() => undefined);
     return { message: 'Post deleted.' };
   }
 

@@ -1,0 +1,18 @@
+CampusLink Admin Clarity Upgrade (patch)
+
+Extract the included apps/ files into your CampusLink workspace and allow overwrite.
+
+Included changes:
+- User detail API includes recent authored comments and their post context, with engagement counts.
+- User detail UI displays recent comments and associated post context, and post repost counts where available.
+- Audit metadata is rendered as readable key/value details instead of raw JSON.
+- Activity Center event metadata is rendered as readable key/value details.
+- Activity Center uses lighter, clearer panels to remove dark blank patches.
+- Overview includes a live platform snapshot built from current API totals (not fabricated historical charts).
+
+After extraction, run:
+  npm run db:generate
+  npm run build -w apps/web
+  npm run build -w apps/api
+
+No schema migration is included in this patch. Existing activity migration is assumed to have been applied.

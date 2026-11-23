@@ -65,6 +65,7 @@ export class SafetyService {
       create: { reporterId, targetType: dto.targetType, targetId: dto.targetId, reason: dto.reason, details: dto.details?.trim() || null },
       select: { id: true, targetType: true, status: true, createdAt: true },
     });
+    await this.prisma.activityEvent.create({ data: { eventType: 'REPORT_SUBMITTED', category: 'REPORT', outcome: 'SUCCESS', actorUserId: reporterId, targetType: dto.targetType, targetId: dto.targetId } }).catch(() => undefined);
     return { report };
   }
 }

@@ -19,7 +19,10 @@ export class AuthController {
   constructor(@Inject(AuthService) private readonly auth: AuthService, @Inject(ConfigService) config: ConfigService) {
     this.cookieName = config.get('REFRESH_COOKIE_NAME', 'campuslink_refresh');
     this.secure = config.get('NODE_ENV') === 'production';
-    this.sameSite = config.get<'lax' | 'strict' | 'none'>('REFRESH_COOKIE_SAME_SITE', this.secure ? 'none' : 'lax');
+    const configuredSameSite = config.get<string>('REFRESH_COOKIE_SAME_SITE', this.secure ? 'none' : 'lax').toLowerCase();
+    if (!['lax', 'strict', 'none'].includes(configuredSameSite)) throw new Error('REFRESH_COOKIE_SAME_SITE must be lax, strict, or none.');
+    this.sameSite = configuredSameSite as 'lax' | 'strict' | 'none';
+    if (this.sameSite === 'none' && !this.secure) throw new Error('REFRESH_COOKIE_SAME_SITE=none requires production secure cookies.');
     this.allowedOrigins = new Set((config.get('CORS_ORIGINS', 'http://localhost:5173') as string).split(',').map((origin) => origin.trim()));
   }
   private cookieOptions() { return { httpOnly: true, secure: this.secure, sameSite: this.sameSite, path: '/api/v1/auth', maxAge: 30 * 24 * 60 * 60 * 1000 }; }

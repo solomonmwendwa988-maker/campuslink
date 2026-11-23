@@ -6,9 +6,12 @@ import cookieParser from 'cookie-parser';
 import express from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
+import { HttpExceptionFilter } from './common/http/http-exception.filter.js';
+import { requestIdMiddleware } from './common/http/request-id.middleware.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false });
+  app.use(requestIdMiddleware);
   app.use(express.raw({ type: 'audio/*', limit: '8mb' }));
   app.use(express.json({ limit: '3mb' }));
   app.use(express.urlencoded({ extended: true, limit: '3mb' }));
@@ -19,7 +22,8 @@ async function bootstrap() {
   app.enableCors({ origin: allowedOrigins, credentials: true, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] });
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, transformOptions: { enableImplicitConversion: false }, disableErrorMessages: process.env.NODE_ENV === 'production' }));
+  app.useGlobalFilters(new HttpExceptionFilter());
   const swagger = new DocumentBuilder().setTitle('CampusLink API').setDescription('CampusLink student community API').setVersion('1.0').addBearerAuth().build();
   SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swagger));
   app.enableShutdownHooks();

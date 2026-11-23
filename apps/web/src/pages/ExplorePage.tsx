@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronRight, Compass, Heart, MessageCircle, Search, ShoppingBag, Users, X } from 'lucide-react';
 import { Avatar } from '../components/shared/Avatar';
+import { VerifiedName } from '../components/shared/VerifiedName';
 import { Post } from '../types/post';
 import { launchUniversity } from '../data/universities';
 import { discoverStudents, DiscoverStudent } from '../services/api';
@@ -23,6 +24,7 @@ type StudentRecord = DiscoverStudent & {
     fullName?: string | null;
     photoUrl?: string | null;
     course?: string | null;
+    verifiedAt?: string | null;
   } | null;
 };
 
@@ -52,6 +54,7 @@ function normalizeStudent(raw: unknown): StudentRecord | null {
       fullName: asText(profileRaw.fullName, username || 'Student'),
       photoUrl: asText(profileRaw.photoUrl) || null,
       course: asText(profileRaw.course),
+      verifiedAt: asText(profileRaw.verifiedAt) || null,
     },
   };
 }
@@ -174,7 +177,7 @@ export function ExplorePage({ posts, listings, search, setSearch, onProfile, onM
               return (
                 <button className="explore-person card" key={asText(person.id, username)} onClick={() => username && onProfile(username)} disabled={!username}>
                   <Avatar initials={initials} image={person.profile?.photoUrl || undefined}/>
-                  <span><b>{name}</b><small>{username ? `@${username}` : 'Campus community'} · {asText(person.profile?.course, 'Student')}</small></span>
+                  <span><b><VerifiedName name={name} verified={Boolean(person.profile?.verifiedAt)} /></b><small>{username ? `@${username}` : 'Campus community'} · {asText(person.profile?.course, 'Student')}</small></span>
                   <ChevronRight size={16}/>
                 </button>
               );

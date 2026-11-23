@@ -1,0 +1,90 @@
+/* CampusLink Phase 7: additive UX, responsive and accessibility refinements.
+   Loaded after the existing stylesheet stack; does not replace existing styles. */
+
+:root {
+  --cl-focus-ring: 3px solid var(--accent, #69e4c2);
+  --cl-focus-offset: 3px;
+  --cl-touch-min: 42px;
+}
+
+html { scroll-behavior: smooth; }
+body { text-rendering: optimizeLegibility; }
+
+/* Keyboard focus: visible and consistent */
+:where(a, button, input, textarea, select, [role="button"], [tabindex]):focus-visible {
+  outline: var(--cl-focus-ring) !important;
+  outline-offset: var(--cl-focus-offset) !important;
+  position: relative;
+  z-index: 1;
+}
+:where(a, button, input, textarea, select, [role="button"], [tabindex]):focus:not(:focus-visible) {
+  outline: none;
+}
+button:disabled, [aria-disabled="true"] { cursor: not-allowed; }
+button, [role="button"] { -webkit-tap-highlight-color: transparent; }
+
+/* Safer wrapping and predictable layouts */
+#root, .app-shell, .layout, .content, .feed-grid, .feed-grid > *,
+.settings-layout, .settings-sections, .messages-page, .profile-page,
+.profile-main, .profile-post-grid, .explore-results, .explore-discovery {
+  min-width: 0;
+}
+:where(.post-content, .post-author, .notification-copy, .message-text,
+       .listing-title, .event-row-copy, .profile-main, .page-heading) {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+img, video, canvas, svg { max-width: 100%; }
+input, textarea, select { max-width: 100%; }
+textarea { line-height: 1.5; }
+
+/* Comfortable interaction targets without changing component dimensions radically */
+@media (pointer: coarse) {
+  :where(.icon-btn, .top-actions button, .mobile-bottom-nav button,
+         .sidebar nav button, .settings-btn, .profile-actions button,
+         .event-row-actions button, .post-actions button) {
+    min-height: var(--cl-touch-min);
+  }
+}
+
+/* Remove hover-only movement on touch; retain subtle desktop affordances */
+@media (hover: hover) and (pointer: fine) {
+  :where(button, a, [role="button"]) { transition: color .16s ease, background-color .16s ease, border-color .16s ease, box-shadow .16s ease; }
+}
+@media (hover: none) {
+  .primary-btn:hover { transform: none; box-shadow: none; }
+}
+
+/* Small tablet and mobile improvements */
+@media (max-width: 900px) {
+  .layout { gap: clamp(14px, 3vw, 28px); }
+  .feed-grid { grid-template-columns: minmax(0, 1fr); }
+  .right-rail { display: none; }
+}
+@media (max-width: 720px) {
+  .topbar { gap: 8px; }
+  .page-heading { align-items: flex-start; }
+  .page-heading h1 { line-height: 1.2; }
+  .card, .post-card, .composer, .settings-card { border-radius: 13px; }
+  .post-actions { gap: clamp(10px, 3.5vw, 20px); flex-wrap: wrap; }
+  .event-row { align-items: flex-start; flex-wrap: wrap; }
+  .event-row-actions { flex-wrap: wrap; }
+  .profile-post-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-layout { grid-template-columns: minmax(0, 1fr); }
+  .messages-page { overflow-x: clip; }
+  .mobile-bottom-nav { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+}
+@media (max-width: 420px) {
+  .page-heading h1 { font-size: clamp(20px, 7vw, 25px); letter-spacing: -.45px; }
+  .page-heading .primary-btn { white-space: normal; }
+  .composer, .post-card, .explore-post { padding-inline: 12px; }
+  .profile-post-grid { gap: 6px; }
+  .profile-facts { flex-wrap: wrap; }
+}
+/* Avoid inaccessible motion for users who request it */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+/* Improve readable text selection and ensure system dialogs aren't hidden by the app */
+::selection { background: color-mix(in srgb, var(--accent, #69e4c2) 35%, transparent); color: inherit; }

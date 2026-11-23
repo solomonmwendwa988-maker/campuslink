@@ -14,6 +14,8 @@ import { MessagingModule } from './messaging/messaging.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { SafetyModule } from './safety/safety.module.js';
 import { AdminAuthModule } from './admin/admin-auth.module.js';
+import { AdminModule } from './admin/admin.module.js';
+import { ActivityModule } from './activity/activity.module.js';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { AdminAuthModule } from './admin/admin-auth.module.js';
     NotificationsModule,
     SafetyModule,
     AdminAuthModule,
+    AdminModule,
+    ActivityModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

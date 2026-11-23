@@ -27,3 +27,8 @@ Thumbs.db
 
 # TypeScript generated files
 *.tsbuildinfo
+
+# Local database backups (contain private user data)
+backups/
+*.dump
+*.dump.sha256

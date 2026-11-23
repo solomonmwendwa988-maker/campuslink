@@ -4,10 +4,10 @@ import { createHash } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const conversationInclude = {
-  participants: { include: { user: { select: { id: true, username: true, profile: { select: { fullName: true, photoUrl: true } } } } } },
+  participants: { include: { user: { select: { id: true, username: true, profile: { select: { fullName: true, photoUrl: true, verifiedAt: true } } } } } },
 } satisfies Prisma.ConversationInclude;
 const conversationListInclude = {
-  participants: { include: { user: { select: { id: true, username: true, profile: { select: { fullName: true, photoUrl: true } } } } } },
+  participants: { include: { user: { select: { id: true, username: true, profile: { select: { fullName: true, photoUrl: true, verifiedAt: true } } } } } },
   messages: { orderBy: { createdAt: 'desc' }, take: 1 },
 } satisfies Prisma.ConversationInclude;
 const messageInclude = {

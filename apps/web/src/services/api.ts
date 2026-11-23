@@ -204,6 +204,23 @@ export async function getAdminIdentity() {
   return request<AdminIdentity>('/admin/auth/me', { authenticated: true });
 }
 
+export type AdminDashboardData = { stats: { users: number; active: number; deactivated: number; posts: number; openReports: number; pendingVerifications: number; verified: number }; recentUsers: AdminUser[]; recentReports: AdminReport[]; recentAudit: AdminAuditLog[] };
+export type AdminUser = { id: string; username: string; email: string; role: 'USER'|'MODERATOR'|'ADMIN'|'SUPER_ADMIN'; deactivatedAt: string|null; suspendedAt: string|null; suspensionReason?: string|null; emailVerifiedAt: string|null; createdAt: string; profile?: { fullName?: string|null; photoUrl?: string|null; coverUrl?: string|null; bio?: string|null; course?: string|null; yearOfStudy?: number|string|null; verifiedAt?: string|null; university?: { name?: string }; campus?: { name?: string } }|null };
+export type AdminReport = { id: string; reporterId: string; targetType: string; targetId: string; reason: string; details: string|null; status: 'OPEN'|'REVIEWED'|'ACTIONED'|'DISMISSED'; createdAt: string; reporter?: { id?: string; username: string } };
+export type AdminVerification = { id: string; userId: string; email: string; phone: string; fullName: string; course: string; campus: string; reason: string; status: 'PENDING'|'APPROVED'|'REJECTED'; submittedAt: string; reviewedAt?: string|null; reviewNote?: string|null; user?: { id: string; username: string; profile?: { fullName?: string|null; photoUrl?: string|null; verifiedAt?: string|null } } };
+export type AdminAuditLog = { id: string; actorId: string; action: string; entityType: string; entityId?: string|null; metadata?: unknown; createdAt: string };
+export async function getAdminDashboard() { return request<AdminDashboardData>('/admin/dashboard', { authenticated: true }); }
+export async function getAdminUsers(q = '', page = 1, limit = 25) { return request<{data: AdminUser[]; page: number; limit: number; total: number; pages: number}>(`/admin/users?q=${encodeURIComponent(q)}&page=${page}&limit=${limit}`, { authenticated: true }); }
+export async function getAdminUserDetails(id: string) { return request<AdminUserDetails>(`/admin/users/${encodeURIComponent(id)}`, { authenticated: true }); }
+export type AdminUserDetails = AdminUser & { counts: { posts: number; followers: number; following: number; comments: number; likes: number; reportsSubmitted: number }; recentPosts: Array<{id:string;content:string;createdAt:string;likes:number;comments:number}>; recentComments: Array<{id:string;content:string;createdAt:string;likes:number;replies:number;post:{id:string;content:string;author:{username:string}}}> };
+export async function setAdminUserStatus(id: string, disabled: boolean, reason?: string) { return request<{id:string; suspended:boolean}>(`/admin/users/${encodeURIComponent(id)}/status`, { method: 'PATCH', authenticated: true, body: JSON.stringify({ disabled, reason }) }); }
+export async function setAdminUserRole(id: string, role: 'USER'|'MODERATOR'|'ADMIN') { return request<{id:string; role:string}>(`/admin/users/${encodeURIComponent(id)}/role`, { method: 'PATCH', authenticated: true, body: JSON.stringify({ role }) }); }
+export async function getAdminReports(status = '') { return request<{data: AdminReport[]}>(`/admin/reports${status ? `?status=${encodeURIComponent(status)}` : ''}`, { authenticated: true }); }
+export async function updateAdminReport(id: string, status: AdminReport['status']) { return request<{id:string;status:string}>(`/admin/reports/${encodeURIComponent(id)}`, { method: 'PATCH', authenticated: true, body: JSON.stringify({ status }) }); }
+export async function getAdminVerifications(status = '') { return request<{data: AdminVerification[]}>(`/admin/verifications${status ? `?status=${encodeURIComponent(status)}` : ''}`, { authenticated: true }); }
+export async function reviewAdminVerification(id: string, status: 'APPROVED'|'REJECTED', note?: string) { return request<{id:string;status:string}>(`/admin/verifications/${encodeURIComponent(id)}`, { method: 'PATCH', authenticated: true, body: JSON.stringify({ status, note }) }); }
+export async function getAdminAuditLogs() { return request<{data: AdminAuditLog[]}>('/admin/audit-logs', { authenticated: true }); }
+
 export async function logout(): Promise<void> {
   try {
     await request('/auth/logout', {
@@ -284,7 +301,7 @@ export async function revokeSession(sessionId: string) {
 export interface MessagingPerson {
   id: string;
   username: string;
-  profile?: { fullName?: string | null; photoUrl?: string | null } | null;
+  profile?: { fullName?: string | null; photoUrl?: string | null; verifiedAt?: string | null } | null;
 }
 
 export interface ApiMessage {
@@ -342,7 +359,7 @@ export async function blockUser(userId: string) {
   return request<{ blocked: boolean }>('/safety/block', { method: 'POST', authenticated: true, body: JSON.stringify({ userId }) });
 }
 
-export interface SafetyAccount { id: string; username: string; profile?: { fullName?: string | null; photoUrl?: string | null } | null; blockedAt?: string; mutedAt?: string; }
+export interface SafetyAccount { id: string; username: string; profile?: { fullName?: string | null; photoUrl?: string | null; verifiedAt?: string | null } | null; blockedAt?: string; mutedAt?: string; }
 export async function getBlockedUsers() { return request<{ data: SafetyAccount[] }>('/safety/blocked', { authenticated: true }); }
 export async function unblockUser(userId: string) { return request<{ blocked: boolean }>(`/safety/block/${encodeURIComponent(userId)}`, { method: 'DELETE', authenticated: true }); }
 export async function getMutedUsers() { return request<{ data: SafetyAccount[] }>('/safety/muted', { authenticated: true }); }
@@ -514,6 +531,41 @@ export async function likeSocialComment(commentId: string) { return request<{ li
 export async function unlikeSocialComment(commentId: string) { return request<{ liked: boolean; likesCount: number }>(`/posts/comments/${encodeURIComponent(commentId)}/like`, { method: 'DELETE', authenticated: true }); }
 export async function getProfileConnections(username: string, direction: 'followers'|'following') { return request<{ data: Array<{ id: string; username: string; profile?: { fullName?: string | null; photoUrl?: string | null } | null }> }>(`/profiles/${encodeURIComponent(username)}/${direction}`, { authenticated: true }); }
 export async function getActivitySummary() { return request<{ unreadNotifications: number; engagement: { posts: number; likesReceived: number; commentsReceived: number; repostsReceived: number; totalReceived: number } }>('/notifications/summary', { authenticated: true }); }
+
+export interface CampusActivityEvent {
+  id: string;
+  eventType: string;
+  category: string;
+  outcome?: string | null;
+  actorUserId?: string | null;
+  targetType?: string | null;
+  targetId?: string | null;
+  maskedIdentifier?: string | null;
+  metadata?: unknown;
+  createdAt: string;
+}
+export interface CampusActivitySummary {
+  days: number;
+  total: number;
+  logins: number;
+  failures: number;
+  signups: number;
+  posts: number;
+  reports: number;
+  adminActions: number;
+  byCategory: Array<{ category: string; count: number }>;
+  daily: Array<{ day: string; count: number }>;
+}
+export async function getAdminActivity(page = 1, limit = 25, category = '', q = '') {
+  const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (category) query.set('category', category);
+  if (q.trim()) query.set('q', q.trim());
+  return request<{ data: CampusActivityEvent[]; page: number; limit: number; total: number; pages: number }>(`/admin/activity?${query.toString()}`, { authenticated: true });
+}
+export async function getAdminActivitySummary(days = 14) {
+  return request<CampusActivitySummary>(`/admin/activity/summary?days=${encodeURIComponent(String(days))}`, { authenticated: true });
+}
+
 
 /* =========================================================
    CAMPUS MARKETPLACE (database-backed)

@@ -1,16 +1,21 @@
 import { ConflictException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ChangePasswordDto, ConfirmPasswordDto, LoginDto, RegisterDto } from './dto.js';
 import { createOpaqueToken, hashOpaqueToken, hashPassword, verifyPassword } from './credentials.js';
+import { maskLoginIdentifier } from './security.utils.js';
 
 const safeUser = { id: true, email: true, username: true, role: true, profile: { select: { fullName: true, university: { select: { name: true } }, campus: { select: { name: true } }, course: true, yearOfStudy: true, bio: true, photoUrl: true, coverUrl: true, interests: true, skills: true, isPrivate: true } } } satisfies Prisma.UserSelect;
 
 @Injectable()
 export class AuthService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService, @Inject(JwtService) private readonly jwt: JwtService, @Inject(ConfigService) private readonly config: ConfigService) {}
+
+  // Equalize the bcrypt work for unknown accounts to reduce username/email timing leakage.
+  private readonly dummyPasswordHash = hashPassword('campuslink-invalid-account-password-check');
 
   async me(userId: string) {
     const user = await this.prisma.user.findFirst({ where: { id: userId, deletedAt: null, deactivatedAt: null }, select: safeUser });
@@ -29,6 +34,7 @@ export class AuthService {
     const passwordHash = await hashPassword(dto.password);
     try {
       const user = await this.prisma.user.create({ data: { email, username, passwordHash, profile: { create: { fullName: dto.name.trim(), universityId: campus.universityId, campusId: campus.id, course: dto.course.trim(), yearOfStudy: dto.year, bio: dto.bio?.trim() || null, photoUrl: dto.photoUrl ?? null, interests: dto.interests ?? [], skills: dto.skills ?? [] } } }, select: safeUser });
+      await this.prisma.activityEvent.create({ data: { eventType: 'USER_REGISTERED', category: 'AUTH', outcome: 'SUCCESS', actorUserId: user.id, targetType: 'USER', targetId: user.id } }).catch(() => undefined);
       return { user, emailVerified: false, verification: 'Email verification is not configured yet. Account is unverified.' };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('Email or username is already in use.');
@@ -38,19 +44,26 @@ export class AuthService {
 
   async login(dto: LoginDto, userAgent?: string) {
     const identifier = dto.identifier.trim().toLowerCase();
-    const user = await this.prisma.user.findFirst({ where: { OR: [{ email: identifier }, { username: identifier }], deletedAt: null }, select: { ...safeUser, passwordHash: true, deactivatedAt: true } });
-    if (!user || !(await verifyPassword(dto.password, user.passwordHash))) throw new UnauthorizedException('Invalid email/username or password.');
-    const reactivated = Boolean(user.deactivatedAt);
-    if (reactivated) await this.prisma.user.update({ where: { id: user.id }, data: { deactivatedAt: null } });
+    const user = await this.prisma.user.findFirst({ where: { OR: [{ email: identifier }, { username: identifier }], deletedAt: null }, select: { ...safeUser, passwordHash: true, deactivatedAt: true, suspendedAt: true } });
+    const passwordMatches = await verifyPassword(dto.password, user?.passwordHash ?? await this.dummyPasswordHash);
+    if (!user || !passwordMatches) {
+      await this.prisma.activityEvent.create({ data: { eventType: 'LOGIN_FAILED', category: 'AUTH', outcome: 'FAILURE', maskedIdentifier: maskLoginIdentifier(identifier) } }).catch(() => undefined);
+      throw new UnauthorizedException('Invalid email/username or password.');
+    }
+    if (user.suspendedAt) {
+      await this.prisma.activityEvent.create({ data: { eventType: 'LOGIN_BLOCKED_SUSPENDED', category: 'AUTH', outcome: 'FAILURE', actorUserId: user.id, targetType: 'USER', targetId: user.id, maskedIdentifier: maskLoginIdentifier(identifier) } }).catch(() => undefined);
+      throw new UnauthorizedException('This account has been suspended. Contact CampusLink support if you believe this is a mistake.');
+    }
     const session = await this.createSession(user.id, user.username, userAgent);
-    const { passwordHash: _passwordHash, deactivatedAt: _deactivatedAt, ...publicUser } = user;
-    return { user: publicUser, accessToken: session.accessToken, refreshToken: session.refreshToken, reactivated };
+    const { passwordHash: _passwordHash, deactivatedAt: _deactivatedAt, suspendedAt: _suspendedAt, ...publicUser } = user;
+    await this.prisma.activityEvent.create({ data: { eventType: 'LOGIN_SUCCESS', category: 'AUTH', outcome: 'SUCCESS', actorUserId: user.id, targetType: 'USER', targetId: user.id, metadata: { reactivated: session.reactivated } } }).catch(() => undefined);
+    return { user: publicUser, accessToken: session.accessToken, refreshToken: session.refreshToken, reactivated: session.reactivated };
   }
 
   async refresh(token: string | undefined, userAgent?: string) {
     if (!token) throw new UnauthorizedException('Refresh session is missing.');
     const oldHash = hashOpaqueToken(token);
-    const session = await this.prisma.refreshSession.findFirst({ where: { tokenHash: oldHash, revokedAt: null, expiresAt: { gt: new Date() }, user: { deletedAt: null, deactivatedAt: null } }, include: { user: { select: { id: true, username: true } } } });
+    const session = await this.prisma.refreshSession.findFirst({ where: { tokenHash: oldHash, revokedAt: null, expiresAt: { gt: new Date() }, user: { deletedAt: null, deactivatedAt: null, suspendedAt: null } }, include: { user: { select: { id: true, username: true } } } });
     if (!session) throw new UnauthorizedException('Refresh session has expired or was revoked.');
     const nextRefresh = createOpaqueToken();
     const changed = await this.prisma.refreshSession.updateMany({ where: { id: session.id, tokenHash: oldHash, revokedAt: null }, data: { tokenHash: hashOpaqueToken(nextRefresh), expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), userAgent } });
@@ -114,8 +127,18 @@ export class AuthService {
 
   private async createSession(userId: string, username: string, userAgent?: string) {
     const refreshToken = createOpaqueToken();
-    const session = await this.prisma.refreshSession.create({ data: { userId, tokenHash: hashOpaqueToken(refreshToken), expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), userAgent: userAgent?.slice(0, 500) }, select: { id: true } });
-    return { refreshToken, accessToken: await this.signAccessToken(userId, username, session.id) };
+    const sessionId = randomUUID();
+    // Sign first so a token-signing failure cannot leave an orphaned live session.
+    const accessToken = await this.signAccessToken(userId, username, sessionId);
+    const reactivated = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.user.findUnique({ where: { id: userId }, select: { deletedAt: true, deactivatedAt: true, suspendedAt: true } });
+      if (!current || current.deletedAt || current.suspendedAt) throw new UnauthorizedException('This account is not permitted to start a session.');
+      const wasDeactivated = Boolean(current.deactivatedAt);
+      if (wasDeactivated) await tx.user.update({ where: { id: userId }, data: { deactivatedAt: null } });
+      await tx.refreshSession.create({ data: { id: sessionId, userId, tokenHash: hashOpaqueToken(refreshToken), expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), userAgent: userAgent?.slice(0, 500) } });
+      return wasDeactivated;
+    });
+    return { refreshToken, accessToken, reactivated };
   }
 
   private signAccessToken(userId: string, username: string, sessionId: string) {

@@ -77,6 +77,8 @@ model User {
   role               UserRole       @default(USER)
   emailVerifiedAt    DateTime?
   deactivatedAt      DateTime?
+  suspendedAt        DateTime?
+  suspensionReason   String?   @db.VarChar(500)
   deletedAt          DateTime?
   profile            Profile?
   sessions           RefreshSession[]
@@ -107,6 +109,7 @@ model User {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   @@index([deletedAt, createdAt])
+  @@index([deletedAt, deactivatedAt, createdAt(sort: Desc), id])
 }
 
 model Profile {
@@ -176,6 +179,7 @@ model Post {
   updatedAt DateTime    @updatedAt
   @@index([createdAt(sort: Desc), id])
   @@index([authorId, createdAt(sort: Desc)])
+  @@index([deletedAt, createdAt(sort: Desc), id])
 }
 
 model PostView {
@@ -213,6 +217,7 @@ model Comment {
   createdAt DateTime  @default(now())
   @@index([postId, createdAt])
   @@index([parentId, createdAt])
+  @@index([postId, parentId, deletedAt, createdAt(sort: Desc), id])
 }
 
 model Like {
@@ -362,6 +367,7 @@ model Listing {
   updatedAt   DateTime         @updatedAt
   @@index([campusId, available, createdAt(sort: Desc)])
   @@index([category, price])
+  @@index([campusId, available, deletedAt, createdAt(sort: Desc), id])
 }
 
 model ListingFavorite {
@@ -400,6 +406,7 @@ model Event {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@index([campusId, startsAt])
+  @@index([campusId, deletedAt, startsAt, id])
 }
 
 model EventInterest {
@@ -456,4 +463,36 @@ model MessagingPresence {
   updatedAt              DateTime @updatedAt
   @@index([lastSeenAt])
   @@index([typingConversationId, typingUntil])
+}
+
+model AdminAuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorId     String   @db.Uuid
+  action      String   @db.VarChar(80)
+  entityType  String   @db.VarChar(40)
+  entityId    String?  @db.Uuid
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  @@index([createdAt(sort: Desc)])
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+}
+
+/// Append-only platform event stream. Metadata must contain only non-sensitive context.
+model ActivityEvent {
+  id               String   @id @default(uuid()) @db.Uuid
+  eventType        String   @db.VarChar(80)
+  category         String   @db.VarChar(40)
+  outcome          String?  @db.VarChar(24)
+  actorUserId      String?  @db.Uuid
+  targetType       String?  @db.VarChar(40)
+  targetId         String?  @db.VarChar(80)
+  maskedIdentifier String?  @db.VarChar(160)
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  @@index([createdAt(sort: Desc)])
+  @@index([category, createdAt(sort: Desc)])
+  @@index([eventType, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([outcome, createdAt(sort: Desc)])
 }

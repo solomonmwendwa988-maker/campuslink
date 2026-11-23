@@ -1,0 +1,116 @@
+/* CampusLink Phase 1B: cross-platform interaction and state polish */
+:root {
+  --cl-motion-fast: 140ms;
+  --cl-motion-base: 190ms;
+  --cl-motion-slow: 260ms;
+  --cl-focus-ring: color-mix(in srgb, var(--accent) 65%, white);
+}
+
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--cl-focus-ring);
+  outline-offset: 2px;
+}
+
+:where(button, a, [role="button"]) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+input, textarea, select {
+  transition: border-color var(--cl-motion-fast) ease, box-shadow var(--cl-motion-fast) ease, background-color var(--cl-motion-fast) ease;
+}
+
+:where(input, textarea, select):focus-visible {
+  outline: none;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card,
+  .listing,
+  .post-card,
+  .event-row {
+    transition: border-color var(--cl-motion-base) ease, box-shadow var(--cl-motion-base) ease, transform var(--cl-motion-base) ease;
+  }
+
+  .card:hover,
+  .listing:hover,
+  .post-card:hover,
+  .event-row:hover {
+    border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
+  }
+
+  .primary-btn:not(:disabled):hover,
+  .campus-dialog-confirm:not(:disabled):hover {
+    filter: brightness(1.04);
+  }
+
+  .outline-btn:not(:disabled):hover,
+  .filter:not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  }
+}
+
+.cl-state-action > :where(button, a) {
+  min-height: 40px;
+}
+
+.cl-inline-notice:focus-within {
+  outline: 2px solid var(--cl-focus-ring);
+  outline-offset: 2px;
+}
+
+.campus-dialog {
+  max-height: min(88dvh, 720px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.campus-report-label {
+  display: block;
+  margin: 4px 0 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.campus-report-dialog textarea {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+}
+
+@media (max-width: 720px) {
+  .campus-dialog-backdrop {
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+    align-items: center;
+  }
+
+  .campus-dialog {
+    width: min(100%, 460px);
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+
+  .cl-inline-notice {
+    padding: 10px 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cl-motion-fast: 0ms;
+    --cl-motion-base: 0ms;
+    --cl-motion-slow: 0ms;
+  }
+
+  .cl-state-spinner {
+    animation: none !important;
+  }
+}
