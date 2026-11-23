@@ -1,5 +1,5 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, Plus, Search, Send, MessageCircle, X, Mic, Square, MoreHorizontal, UserRound, VolumeX, ShieldBan, Flag } from 'lucide-react';
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, Plus, Search, Send, MessageCircle, X, Mic, Square, MoreHorizontal, UserRound, VolumeX, ShieldBan, Flag } from 'lucide-react';
 import { Avatar } from '../shared/Avatar';
 import { VerifiedName } from '../shared/VerifiedName';
 import { ApiConversation, ApiMessage, listConversations, getConversationMessages, sendConversationMessage, markConversationRead, startConversation, sendVoiceMessage, blockUser, reportUser, muteConversation, unmuteConversation, getPresence, setConversationTyping, getConversationTyping } from '../../services/api';
@@ -68,6 +68,21 @@ function timeLabel(date?: string) {
   return value.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function dayKey(date: string) { const value = new Date(date); return Number.isNaN(value.getTime()) ? '' : value.toDateString(); }
+function dayLabel(date: string) {
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return '';
+  const now = new Date();
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  if (value.toDateString() === now.toDateString()) return 'Today';
+  if (value.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return value.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', ...(value.getFullYear() !== now.getFullYear() ? { year: 'numeric' as const } : {}) });
+}
+// Below this width the inbox and the conversation are shown one at a time (tablet sidebar + 2 panes does not fit).
+const SINGLE_PANE_QUERY = '(max-width: 1023px)';
+const GROUP_GAP_MS = 5 * 60 * 1000;
+const MAX_MESSAGE_LENGTH = 5000; // mirrors SendMessageDto @MaxLength(5000)
+
 export function MessagesPage({ cacheScope = 'anonymous', initialUsername, onInitialHandled }: { cacheScope?: string; initialUsername?: string; onInitialHandled?: () => void }) {
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<ApiConversation[]>(() => readInboxCache(cacheScope));
@@ -105,6 +120,12 @@ export function MessagesPage({ cacheScope = 'anonymous', initialUsername, onInit
   const typingTimerRef = useRef<number | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
+  const stickToBottomRef = useRef(true);
+  const lastScrollKeyRef = useRef('');
   const openedInitialUsername = useRef<string>('');
   const selected = conversations.find(item => item.id === selectedId) ?? null;
   const muted = Boolean(selected?.muted);
@@ -234,7 +255,7 @@ export function MessagesPage({ cacheScope = 'anonymous', initialUsername, onInit
   useEffect(() => {
     if (!selectedId) return;
     const timer = window.setInterval(() => {
-      if (document.visibilityState !== 'visible' || (!mobileChatOpen && window.matchMedia('(max-width: 720px)').matches)) return;
+      if (document.visibilityState !== 'visible' || (!mobileChatOpen && window.matchMedia(SINGLE_PANE_QUERY).matches)) return;
       void refreshMessages(selectedId, true, false);
     }, 12000);
     return () => window.clearInterval(timer);
@@ -262,18 +283,47 @@ export function MessagesPage({ cacheScope = 'anonymous', initialUsername, onInit
     if (selectedId) void setConversationTyping(selectedId, false).catch(() => undefined);
   }, [selectedId]);
 
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [messages.length, selectedId]);
+  // Jump instantly when a conversation opens; follow new messages smoothly only if the reader is already near the bottom.
+  useEffect(() => {
+    const node = scrollRef.current; if (!node) return;
+    const key = `${selectedId ?? ''}`;
+    const opening = lastScrollKeyRef.current !== key;
+    if (opening) { lastScrollKeyRef.current = key; stickToBottomRef.current = true; }
+    if (opening || stickToBottomRef.current) node.scrollTo({ top: node.scrollHeight, behavior: opening ? 'auto' : 'smooth' });
+  }, [messages.length, selectedId, loadingMessages, typingUsers]);
+  const handleChatScroll = () => { const node = scrollRef.current; if (node) stickToBottomRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 120; };
+
+  // Keep the full-screen mobile chat sized to the visual viewport so the on-screen keyboard never covers the composer.
+  useEffect(() => {
+    const page = pageRef.current; const viewport = window.visualViewport;
+    if (!page || !viewport || !mobileChatOpen) return;
+    const apply = () => { page.style.setProperty('--messages-vh', `${Math.round(viewport.height)}px`); page.style.setProperty('--messages-vtop', `${Math.round(viewport.offsetTop)}px`); if (stickToBottomRef.current) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }); };
+    apply(); viewport.addEventListener('resize', apply); viewport.addEventListener('scroll', apply);
+    return () => { viewport.removeEventListener('resize', apply); viewport.removeEventListener('scroll', apply); page.style.removeProperty('--messages-vh'); page.style.removeProperty('--messages-vtop'); };
+  }, [mobileChatOpen]);
+
+  // Close the conversation options menu on outside click or Escape.
+  useEffect(() => {
+    if (!contactMenuOpen) return;
+    const onDown = (event: MouseEvent | TouchEvent) => { const target = event.target as Node; if (menuRef.current?.contains(target) || (target as HTMLElement).closest?.('.chat-contact-menu-trigger')) return; setContactMenuOpen(false); };
+    const onKey = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') setContactMenuOpen(false); };
+    document.addEventListener('mousedown', onDown); document.addEventListener('touchstart', onDown); document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('touchstart', onDown); document.removeEventListener('keydown', onKey); };
+  }, [contactMenuOpen]);
+
+  // Grow the composer with its content (capped by CSS max-height); shrink back after sending.
+  useEffect(() => { const node = inputRef.current; if (!node) return; node.style.height = 'auto'; node.style.height = `${Math.min(node.scrollHeight, 140)}px`; }, [draft, selectedId, recording, voiceBlob]);
 
   const openConversation = (id: string) => {
     setSelectedId(id); setMobileChatOpen(true); setMessages(readMessageCache(cacheScope, id)); setLoadingMessages(readMessageCache(cacheScope, id).length === 0); setContactMenuOpen(false); setVoiceBlob(null); setVoicePreviewUrl(null); setError('');
-    if (window.matchMedia('(max-width: 720px)').matches) window.history.pushState({ campuslinkConversation: id }, '', `${window.location.pathname}#conversation`);
+    if (window.matchMedia(SINGLE_PANE_QUERY).matches) window.history.pushState({ campuslinkConversation: id }, '', `${window.location.pathname}#conversation`);
   };
   const back = () => { if (window.location.hash === '#conversation') window.history.back(); else setMobileChatOpen(false); };
   useEffect(() => { const onPop = () => setMobileChatOpen(false); window.addEventListener('popstate', onPop); return () => window.removeEventListener('popstate', onPop); }, []);
 
   const submitMessage = async (event: FormEvent) => {
-    event.preventDefault(); const content = draft.trim(); if (!content || !selectedId || sending) return;
-    setSending(true); setError(''); const clientMessageId = crypto.randomUUID();
+    event.preventDefault(); const content = draft.trim(); if (!content || !selectedId || sending || sendingRef.current) return;
+    sendingRef.current = true; setSending(true); setError(''); const clientMessageId = crypto.randomUUID();
     try {
       const result = await sendConversationMessage(selectedId, content, clientMessageId);
       const updatedMessages = mergeMessages(messages, [result.message]);
@@ -281,13 +331,20 @@ export function MessagesPage({ cacheScope = 'anonymous', initialUsername, onInit
       writeMessageCache(cacheScope, selectedId, updatedMessages);
       handleDraftChange(''); void refreshConversations(true);
     } catch (err) { setError(err instanceof Error ? err.message : 'Message failed to send. Please retry.'); }
-    finally { setSending(false); }
+    finally { sendingRef.current = false; setSending(false); }
+  };
+  const onComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Desktop: Enter sends, Shift+Enter adds a line. Touch devices: Enter adds a line, the Send button sends.
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+    if (window.matchMedia('(pointer: coarse)').matches) return;
+    event.preventDefault(); event.currentTarget.form?.requestSubmit();
   };
   const createChat = async (event: FormEvent) => {
-    event.preventDefault(); const username = newUsername.trim().replace(/^@/, ''); if (!username) return;
-    setError('');
+    event.preventDefault(); const username = newUsername.trim().replace(/^@/, ''); if (!username || newChatBusy) return;
+    setError(''); setNewChatBusy(true);
     try { const result = await startConversation(username); await refreshConversations(true); setSelectedId(result.conversation.id); setMobileChatOpen(true); setNewChatOpen(false); setNewUsername(''); }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not start conversation.'); }
+    finally { setNewChatBusy(false); }
   };
 
   const openContactProfile = () => { if (contact?.username) navigate(pathForProfile(contact.username)); };
@@ -303,32 +360,43 @@ export function MessagesPage({ cacheScope = 'anonymous', initialUsername, onInit
   useEffect(() => () => { streamRef.current?.getTracks().forEach(track => track.stop()); if (recordTimerRef.current) window.clearInterval(recordTimerRef.current); if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl); }, [voicePreviewUrl]);
   const formatDuration = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
 
-  return <div className={`messages-page card instagram-messages${mobileChatOpen ? ' mobile-chat-open' : ''}`}>
+  return <div ref={pageRef} className={`messages-page card instagram-messages${mobileChatOpen ? ' mobile-chat-open' : ''}`}>
     <aside className="conversation-list" aria-label="Messages inbox">
       <header className="conversation-list-header"><div><h1>Messages</h1><span className="inbox-subtitle">Your campus conversations</span></div><button className="new-message-btn" onClick={() => setNewChatOpen(open => !open)} title="New message" aria-label="New message"><Plus size={19}/></button></header>
-      <label className="message-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search conversations" aria-label="Search conversations"/><button type="button" onClick={() => setSearch('')} aria-label="Clear search"><X size={15}/></button></label>
-      {newChatOpen && <form className="new-chat-form" onSubmit={createChat}><input value={newUsername} onChange={event => setNewUsername(event.target.value)} placeholder="Student username" autoFocus/><button type="submit" disabled={!newUsername.trim() || newChatBusy}>{newChatBusy ? 'Starting…' : 'Start'}</button></form>}
+      <label className="message-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search conversations" aria-label="Search conversations"/>{search && <button type="button" onClick={() => setSearch('')} aria-label="Clear search"><X size={15}/></button>}</label>
+      {newChatOpen && <form className="new-chat-form" onSubmit={createChat}><input value={newUsername} onChange={event => setNewUsername(event.target.value)} placeholder="Student username" aria-label="Student username" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoFocus/><button type="submit" disabled={!newUsername.trim() || newChatBusy}>{newChatBusy ? 'Starting…' : 'Start'}</button></form>}
        {error && <div className="messages-error" role="alert"><span>{error}</span><button type="button" onClick={() => void (mobileChatOpen && selectedId ? refreshMessages(selectedId, false, true) : refreshConversations(false))}>Retry</button></div>}
       <div className="conversation-items">
         {loadingList && conversations.length === 0 && <div className="inbox-skeleton" aria-label="Loading conversations">{Array.from({length:4},(_,i)=><div className="inbox-skeleton-row" key={i}><span className="skeleton skeleton-avatar"/><span className="skeleton skeleton-line"/><span className="skeleton skeleton-time"/></div>)}</div>}
         {!loadingList && conversations.length === 0 && <div className="inbox-empty"><MessageCircle size={25}/><strong>Your messages are waiting</strong><span>Start a conversation with a student from Explore.</span><button onClick={() => setNewChatOpen(true)}>New message</button></div>}
-        {filtered.map(item => { const student = item.participants[0]; const title = personName(student); const last = item.lastMessage; const isMine = Boolean(last && item.participants.every(p => p.id !== last.senderId)); return <button className={`conversation ig-conversation${selectedId === item.id ? ' selected' : ''}`} key={item.id} onClick={() => openConversation(item.id)}>
-          <span className={`conversation-avatar${student && onlineUsers.has(student.id) ? ' is-online' : ''}`}><Avatar initials={initials(title)} image={student?.profile?.photoUrl ?? undefined}/>{student && onlineUsers.has(student.id) && <i aria-label="Online" title="Online"/>}</span><span className="conversation-details"><strong><VerifiedName name={title} verified={Boolean(student?.profile?.verifiedAt)} /></strong><small>{last ? `${isMine ? 'You: ' : ''}${last.content}` : 'Start a conversation'}</small></span><span className="conversation-meta"><small>{timeLabel(last?.createdAt ?? item.updatedAt)}</small>{item.unreadCount > 0 && <b>{item.unreadCount}</b>}</span>
+        {filtered.map(item => { const student = item.participants[0]; const title = personName(student); const last = item.lastMessage; const isMine = Boolean(last && item.participants.every(p => p.id !== last.senderId)); return <button className={`conversation ig-conversation${selectedId === item.id ? ' selected' : ''}${item.unreadCount > 0 ? ' unread' : ''}`} key={item.id} aria-current={selectedId === item.id ? 'true' : undefined} onClick={() => openConversation(item.id)}>
+          <span className={`conversation-avatar${student && onlineUsers.has(student.id) ? ' is-online' : ''}`}><Avatar initials={initials(title)} image={student?.profile?.photoUrl ?? undefined}/>{student && onlineUsers.has(student.id) && <i aria-label="Online" title="Online"/>}</span><span className="conversation-details"><strong><VerifiedName name={title} verified={Boolean(student?.profile?.verifiedAt)} /></strong><small>{last ? `${isMine ? 'You: ' : ''}${last.content}` : 'Start a conversation'}</small></span><span className="conversation-meta"><small>{timeLabel(last?.createdAt ?? item.updatedAt)}</small>{item.unreadCount > 0 && <b aria-label={`${item.unreadCount} unread`}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</b>}</span>
         </button>})}
-        {!loadingList && filtered.length === 0 && conversations.length > 0 && <div className="conversation-empty">No conversations found.</div>}
+        {!loadingList && filtered.length === 0 && conversations.length > 0 && <div className="conversation-empty" role="status">No conversations match “{search.trim()}”.</div>}
       </div>
     </aside>
     <section className="chat-active" aria-label={contact ? `Conversation with ${personName(contact)}` : 'Conversation'}>
       {!selected ? <div className="instagram-chat-welcome"><div className="welcome-icon"><Send size={28}/></div><h2>Your messages</h2><p>Connect with classmates and keep conversations going.</p><button onClick={() => setNewChatOpen(true)}>Send a message</button></div> : <>
-        <header className="chat-head ig-chat-head"><button className="chat-back" onClick={back} aria-label="Back to inbox"><ChevronRight size={19}/></button><button className="chat-contact-profile" type="button" onClick={openContactProfile} title="View profile"><Avatar initials={initials(personName(contact))} image={contact?.profile?.photoUrl ?? undefined}/><div className="chat-contact"><strong><VerifiedName name={personName(contact)} verified={Boolean(contact?.profile?.verifiedAt)} /></strong><small><i className={contact && onlineUsers.has(contact.id) ? 'online' : ''}/>{contact && onlineUsers.has(contact.id) ? 'Online' : `@${contact?.username}`}</small></div></button><button className="chat-contact-menu-trigger" onClick={()=>setContactMenuOpen(open=>!open)} aria-label="Conversation options"><MoreHorizontal size={19}/></button></header>{contactMenuOpen&&<div className="conversation-contact-menu"><button onClick={openContactProfile}><UserRound size={16}/> View profile</button><button onClick={toggleMute}><VolumeX size={16}/> {muted?'Unmute conversation':'Mute conversation'}</button><button onClick={handleReport}><Flag size={16}/> Report user</button><button className="danger" onClick={handleBlock}><ShieldBan size={16}/> Block user</button></div>}
-        <div className="chat-scroll ig-chat-scroll" ref={scrollRef} aria-live="polite">
+        <header className="chat-head ig-chat-head"><button type="button" className="chat-back" onClick={back} aria-label="Back to conversations"><ChevronLeft size={22}/></button><button className="chat-contact-profile" type="button" onClick={openContactProfile} title="View profile"><Avatar initials={initials(personName(contact))} image={contact?.profile?.photoUrl ?? undefined}/><div className="chat-contact"><strong><VerifiedName name={personName(contact)} verified={Boolean(contact?.profile?.verifiedAt)} /></strong><small><i className={contact && onlineUsers.has(contact.id) ? 'online' : ''}/>{contact && onlineUsers.has(contact.id) ? 'Online' : `@${contact?.username}`}</small></div></button><button type="button" className="chat-contact-menu-trigger" onClick={()=>setContactMenuOpen(open=>!open)} aria-label="Conversation options" aria-haspopup="menu" aria-expanded={contactMenuOpen}><MoreHorizontal size={19}/></button></header>{contactMenuOpen&&<div className="conversation-contact-menu" role="menu" ref={menuRef}><button onClick={openContactProfile}><UserRound size={16}/> View profile</button><button onClick={toggleMute}><VolumeX size={16}/> {muted?'Unmute conversation':'Mute conversation'}</button><button onClick={handleReport}><Flag size={16}/> Report user</button><button className="danger" onClick={handleBlock}><ShieldBan size={16}/> Block user</button></div>}
+        <div className="chat-scroll ig-chat-scroll" ref={scrollRef} onScroll={handleChatScroll} role="log" aria-live="polite" aria-label="Messages">
           <div className="chat-profile-intro"><Avatar initials={initials(personName(contact))} image={contact?.profile?.photoUrl ?? undefined}/><strong><VerifiedName name={personName(contact)} verified={Boolean(contact?.profile?.verifiedAt)} /></strong><span>@{contact?.username}</span><p>CampusLink · University community</p></div>
           {loadingMessages && messages.length === 0 && <div className="chat-skeleton" aria-label="Loading messages">{Array.from({length:5},(_,i)=><span className={`skeleton skeleton-message ${i%2?'right':'left'}`} key={i}/> )}</div>}
-          {messages.map(message => { const mine = selected.participants.length > 0 && !selected.participants.some(p => p.id === message.senderId); const audioAttachment = message.attachments?.find(attachment => attachment.mediaType.startsWith('audio/')); return <div className={`ig-message-row${mine ? ' mine' : ''}`} key={message.id}><div className="chat-bubble ig-bubble">{audioAttachment ? <div className="voice-message"><audio controls preload="metadata" src={audioAttachment.url}/><span>Voice message</span></div> : message.content}<span className="chat-time">{timeLabel(message.createdAt)}</span>{mine && <span className={`message-receipt${message.readAt ? ' seen' : message.deliveredAt ? ' delivered' : ''}`}>{message.readAt ? 'Seen' : message.deliveredAt ? 'Delivered' : 'Sent'}</span>}</div></div>; })}
+          {messages.map((message, index) => {
+            const mine = selected.participants.length > 0 && !selected.participants.some(p => p.id === message.senderId);
+            const audioAttachment = message.attachments?.find(attachment => attachment.mediaType.startsWith('audio/'));
+            const prev = messages[index - 1]; const next = messages[index + 1];
+            const newDay = !prev || dayKey(prev.createdAt) !== dayKey(message.createdAt);
+            const startsGroup = newDay || prev.senderId !== message.senderId || new Date(message.createdAt).getTime() - new Date(prev.createdAt).getTime() > GROUP_GAP_MS;
+            const endsGroup = !next || next.senderId !== message.senderId || dayKey(next.createdAt) !== dayKey(message.createdAt) || new Date(next.createdAt).getTime() - new Date(message.createdAt).getTime() > GROUP_GAP_MS;
+            return <div className="ig-message-block" key={message.id}>
+              {newDay && <div className="chat-day-separator"><span>{dayLabel(message.createdAt)}</span></div>}
+              <div className={`ig-message-row${mine ? ' mine' : ''}${startsGroup ? ' group-start' : ''}${endsGroup ? ' group-end' : ''}`}><div className="chat-bubble ig-bubble">{audioAttachment ? <div className="voice-message"><audio controls preload="metadata" src={audioAttachment.url}/><span>Voice message</span></div> : message.content}{endsGroup && <span className="chat-time">{timeLabel(message.createdAt)}</span>}{mine && endsGroup && <span className={`message-receipt${message.readAt ? ' seen' : message.deliveredAt ? ' delivered' : ''}`}>{message.readAt ? 'Seen' : message.deliveredAt ? 'Delivered' : 'Sent'}</span>}</div></div>
+            </div>;
+          })}
           {!loadingMessages && messages.length === 0 && <div className="chat-empty-state"><b>Say hello to {personName(contact)}</b><span>You're connected. Start your conversation.</span></div>}
           {contact && typingUsers.has(contact.id) && <div className="typing-indicator"><span className="typing-dots"><i/><i/><i/></span><span>{personName(contact)} is typing</span></div>}
         </div>
-        <form className="chat-send ig-chat-send" onSubmit={submitMessage}>{voiceBlob&&voicePreviewUrl?<div className="voice-preview"><audio controls src={voicePreviewUrl}/><span>{formatDuration(recordSeconds)}</span><button type="button" onClick={cancelVoiceRecording} aria-label="Discard recording"><X size={16}/></button><button type="button" onClick={sendVoice} disabled={voiceSending}>{voiceSending?'Uploading…':'Send voice'}</button></div>:recording?<div className="voice-recording-controls"><span className="recording-dot"/><b>{formatDuration(recordSeconds)}</b><span>Recording voice message</span><button type="button" onClick={cancelVoiceRecording} aria-label="Cancel recording"><X size={17}/></button><button type="button" onClick={stopVoiceRecording} aria-label="Stop recording"><Square size={16}/></button></div>:<><input value={draft} onChange={event => handleDraftChange(event.target.value)} placeholder="Message…" aria-label="Write a message" autoComplete="off"/><button type="button" className="voice-record-button" onClick={beginVoiceRecording} aria-label="Record voice message"><Mic size={17}/></button><button type="submit" aria-label="Send message" disabled={!draft.trim() || sending}>{sending ? "Sending…" : <Send size={17}/>}</button></>}</form>
+        <form className="chat-send ig-chat-send" onSubmit={submitMessage}>{voiceBlob&&voicePreviewUrl?<div className="voice-preview"><audio controls src={voicePreviewUrl}/><span>{formatDuration(recordSeconds)}</span><button type="button" onClick={cancelVoiceRecording} aria-label="Discard recording"><X size={16}/></button><button type="button" onClick={sendVoice} disabled={voiceSending}>{voiceSending?'Uploading…':'Send voice'}</button></div>:recording?<div className="voice-recording-controls"><span className="recording-dot"/><b>{formatDuration(recordSeconds)}</b><span>Recording voice message</span><button type="button" onClick={cancelVoiceRecording} aria-label="Cancel recording"><X size={17}/></button><button type="button" onClick={stopVoiceRecording} aria-label="Stop recording"><Square size={16}/></button></div>:<><textarea ref={inputRef} rows={1} value={draft} maxLength={MAX_MESSAGE_LENGTH} onChange={event => handleDraftChange(event.target.value)} onKeyDown={onComposerKeyDown} placeholder="Message…" aria-label="Write a message" enterKeyHint="send" autoComplete="off"/><button type="button" className="voice-record-button" onClick={beginVoiceRecording} aria-label="Record voice message"><Mic size={17}/></button><button type="submit" className="send-button" aria-label={sending ? 'Sending message' : 'Send message'} aria-busy={sending} disabled={!draft.trim() || sending}>{sending ? <span className="send-spinner" aria-hidden="true"/> : <Send size={17}/>}</button></>}</form>
       </>}
     </section>
     <ConfirmDialog open={blockDialogOpen} title={`Block @${contact?.username ?? 'this student'}?`} description="They will no longer be able to interact with you as usual. Your follow connections will be removed. You can unblock them later from Settings." confirmLabel="Block account" tone="danger" busy={blockBusy} onCancel={()=>setBlockDialogOpen(false)} onConfirm={confirmBlock}/>
