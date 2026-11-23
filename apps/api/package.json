@@ -13,7 +13,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "test": "tsx --test test/auth.security.spec.ts",
     "test:db": "tsx --test test/auth.database.spec.ts",
-    "admin:bootstrap": "tsx prisma/bootstrap-admin.ts"
+    "admin:bootstrap": "tsx prisma/bootstrap-admin.ts",
+    "production:check": "node ../../scripts/production-readiness.mjs api"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.22",
@@ -42,7 +43,7 @@
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
-    "@types/express": "^5.0.0",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.5",
     "@types/passport-jwt": "^4.0.1",
     "prisma": "^6.19.3",

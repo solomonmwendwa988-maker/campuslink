@@ -1,4 +1,3 @@
-
 {
   "name": "campuslink",
   "private": true,
@@ -13,7 +12,10 @@
     "start": "npm run start -w apps/api",
     "db:generate": "prisma generate --schema apps/api/prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema apps/api/prisma/schema.prisma",
-    "db:status": "prisma migrate status --schema apps/api/prisma/schema.prisma"
+    "db:status": "prisma migrate status --schema apps/api/prisma/schema.prisma",
+    "production:check": "npm run production:check:api && npm run production:check:web",
+    "production:check:api": "node scripts/production-readiness.mjs api",
+    "production:check:web": "node scripts/production-readiness.mjs web"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
